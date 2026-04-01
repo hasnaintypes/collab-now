@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(rm:*)",
+      "WebSearch",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm view:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm audit:*)",
+      "WebFetch(domain:www.better-auth.com)",
+      "WebFetch(domain:better-auth.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:orm.drizzle.team)",
+      "Bash(ls:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm dlx:*)",
+      "Bash(printf y\\\\ny\\\\n:*)",
+      "Bash(yes y:*)"
+    ]
+  }
+}

@@ -1,115 +1,36 @@
-# LiveDocs  
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-LiveDocs is a collaborative document editor inspired by Google Docs. Built with Next.js for the user interface, Liveblocks for real-time functionality, and styled using TailwindCSS, this project highlights the developer’s expertise in building real-time, collaborative applications.  
+## Getting Started
 
-Whether you’re new or need help, join our vibrant Discord community of over 34k members, where users actively share solutions and ideas.  
+First, run the development server:
 
----
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-## ⚙️ Tech Stack  
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-- **Next.js**  
-- **TypeScript**  
-- **Liveblocks**  
-- **Lexical Editor**  
-- **ShadCN**  
-- **Tailwind CSS**  
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
----
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## 🔋 Features  
+## Learn More
 
-👉 **Secure Authentication**  
-Sign in with GitHub using NextAuth for a secure and smooth login experience.  
+To learn more about Next.js, take a look at the following resources:
 
-👉 **Real-Time Collaboration**  
-Work on documents simultaneously with others and see updates in real time.  
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-👉 **Document Management**  
-- **Create Documents**: Quickly create and auto-save new documents.  
-- **Delete Documents**: Remove documents you no longer need.  
-- **Share Documents**: Share documents via email or link, with options for view or edit permissions.  
-- **Browse Documents**: View all owned and shared documents, with search and sorting capabilities.  
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-👉 **Inline and Threaded Comments**  
-Add comments directly within the document or start discussions with threaded replies.  
+## Deploy on Vercel
 
-👉 **Active Collaborator Indicators**  
-See who else is editing with real-time presence indicators.  
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-👉 **Notifications**  
-Stay informed with alerts for shared documents, comments, and collaborator actions.  
-
-👉 **Responsive Design**  
-Enjoy a seamless experience on desktops, tablets, and mobile devices.  
-
-... and more, including reusable components and a scalable codebase.  
-
----
-
-## 🤸 Quick Start  
-
-Set up LiveDocs locally by following these steps.  
-
-### Prerequisites  
-
-Ensure you have the following installed on your system:  
-
-- **Git**  
-- **Node.js**  
-- **npm** (or your preferred package manager)  
-
-### Clone the Repository  
-
-```bash  
-git clone https://github.com/Nainee99/live_docs.git  
-cd live_docs  
-```  
-
-### Install Dependencies  
-
-Install the required packages with npm:  
-
-```bash  
-npm install  
-```  
-
-### Configure Environment Variables  
-
-Create a `.env` file in the root directory and include the following:  
-
-```env  
-# Clerk  
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=  
-CLERK_SECRET_KEY=  
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in  
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up  
-
-# Liveblocks  
-NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=  
-LIVEBLOCKS_SECRET_KEY=  
-```  
-
-Replace the placeholder values with your actual **Clerk** and **Liveblocks** credentials, which you can obtain by signing up on their respective platforms.  
-
-### Start the Application  
-
-Run the development server:  
-
-```bash  
-npm run dev  
-```  
-
-Visit [http://localhost:3000](http://localhost:3000) in your browser to start using LiveDocs.  
-
----
-
-## 🛠️ Contributing  
-
-Contributions are welcome! Feel free to open issues or submit pull requests to enhance the project.  
-
----
-
-## 📄 License  
-
-This project is licensed under the MIT License.  
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
