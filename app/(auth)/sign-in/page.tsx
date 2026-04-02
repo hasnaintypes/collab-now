@@ -1,37 +1,42 @@
 'use client'
 
-import React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useForm } from 'react-hook-form'
+import { useState } from 'react'
 import { LogoIcon } from '@/components/logo'
 import { Input } from '@/components/ui/input'
+import { signIn } from '@/lib/auth-client'
+
+type SignInForm = {
+    email: string
+    password: string
+}
 
 export default function SignInPage() {
-    const [error, setError] = React.useState('')
-    const [loading, setLoading] = React.useState(false)
+    const router = useRouter()
+    const [serverError, setServerError] = useState('')
 
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isSubmitting },
+    } = useForm<SignInForm>()
 
-        const formData = new FormData(e.currentTarget)
-        const email = formData.get('email') as string
-        const password = formData.get('password') as string
+    async function onSubmit(data: SignInForm) {
+        setServerError('')
 
-        if (!email || !password) {
-            setError('Please fill in all fields.')
-            setLoading(false)
-            return
-        }
+        const { error } = await signIn.email(
+            { email: data.email, password: data.password },
+            {
+                onSuccess: () => {
+                    router.push('/dashboard')
+                },
+            }
+        )
 
-        // Placeholder for auth integration
-        try {
-            await new Promise((resolve) => setTimeout(resolve, 1000))
-            // signIn({ email, password })
-        } catch {
-            setError('Invalid email or password.')
-        } finally {
-            setLoading(false)
+        if (error) {
+            setServerError(error.message ?? 'Invalid email or password.')
         }
     }
 
@@ -52,19 +57,21 @@ export default function SignInPage() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div className="space-y-1.5">
                     <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Email Address
                     </label>
                     <Input
                         id="email"
-                        name="email"
                         type="email"
                         placeholder="you@example.com"
-                        required
                         className="h-12 bg-muted/50 border-border/30 focus-visible:border-primary"
+                        {...register('email', { required: 'Email is required.' })}
                     />
+                    {errors.email && (
+                        <p className="text-sm text-destructive">{errors.email.message}</p>
+                    )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -73,23 +80,25 @@ export default function SignInPage() {
                     </label>
                     <Input
                         id="password"
-                        name="password"
                         type="password"
                         placeholder="••••••••"
-                        required
                         className="h-12 bg-muted/50 border-border/30 focus-visible:border-primary"
+                        {...register('password', { required: 'Password is required.' })}
                     />
+                    {errors.password && (
+                        <p className="text-sm text-destructive">{errors.password.message}</p>
+                    )}
                 </div>
 
-                {error && (
-                    <p className="text-sm text-destructive">{error}</p>
+                {serverError && (
+                    <p className="text-sm text-destructive">{serverError}</p>
                 )}
 
                 <button
                     type="submit"
-                    disabled={loading}
+                    disabled={isSubmitting}
                     className="w-full bg-primary text-primary-foreground font-bold py-4 hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50">
-                    {loading ? 'Signing in...' : 'Sign In'}
+                    {isSubmitting ? 'Signing in...' : 'Sign In'}
                 </button>
             </form>
 

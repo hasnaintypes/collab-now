@@ -1,44 +1,43 @@
 'use client'
 
-import React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useForm } from 'react-hook-form'
+import { useState } from 'react'
 import { LogoIcon } from '@/components/logo'
 import { Input } from '@/components/ui/input'
+import { signUp } from '@/lib/auth-client'
+
+type SignUpForm = {
+    name: string
+    email: string
+    password: string
+}
 
 export default function SignUpPage() {
-    const [error, setError] = React.useState('')
-    const [loading, setLoading] = React.useState(false)
+    const router = useRouter()
+    const [serverError, setServerError] = useState('')
 
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
+    const {
+        register,
+        handleSubmit,
+        formState: { errors, isSubmitting },
+    } = useForm<SignUpForm>()
 
-        const formData = new FormData(e.currentTarget)
-        const name = formData.get('name') as string
-        const email = formData.get('email') as string
-        const password = formData.get('password') as string
+    async function onSubmit(data: SignUpForm) {
+        setServerError('')
 
-        if (!name || !email || !password) {
-            setError('Please fill in all fields.')
-            setLoading(false)
-            return
-        }
+        const { error } = await signUp.email(
+            { name: data.name, email: data.email, password: data.password },
+            {
+                onSuccess: () => {
+                    router.push('/dashboard')
+                },
+            }
+        )
 
-        if (password.length < 8) {
-            setError('Password must be at least 8 characters.')
-            setLoading(false)
-            return
-        }
-
-        // Placeholder for auth integration
-        try {
-            await new Promise((resolve) => setTimeout(resolve, 1000))
-            // signUp({ name, email, password })
-        } catch {
-            setError('Something went wrong. Please try again.')
-        } finally {
-            setLoading(false)
+        if (error) {
+            setServerError(error.message ?? 'Something went wrong. Please try again.')
         }
     }
 
@@ -59,19 +58,21 @@ export default function SignUpPage() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 <div className="space-y-1.5">
                     <label htmlFor="name" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         Full Name
                     </label>
                     <Input
                         id="name"
-                        name="name"
                         type="text"
                         placeholder="Evelyn Thorne"
-                        required
                         className="h-12 bg-muted/50 border-border/30 focus-visible:border-primary"
+                        {...register('name', { required: 'Name is required.' })}
                     />
+                    {errors.name && (
+                        <p className="text-sm text-destructive">{errors.name.message}</p>
+                    )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -80,12 +81,14 @@ export default function SignUpPage() {
                     </label>
                     <Input
                         id="email"
-                        name="email"
                         type="email"
                         placeholder="evelyn@thought.co"
-                        required
                         className="h-12 bg-muted/50 border-border/30 focus-visible:border-primary"
+                        {...register('email', { required: 'Email is required.' })}
                     />
+                    {errors.email && (
+                        <p className="text-sm text-destructive">{errors.email.message}</p>
+                    )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -94,24 +97,28 @@ export default function SignUpPage() {
                     </label>
                     <Input
                         id="password"
-                        name="password"
                         type="password"
                         placeholder="••••••••"
-                        required
-                        minLength={8}
                         className="h-12 bg-muted/50 border-border/30 focus-visible:border-primary"
+                        {...register('password', {
+                            required: 'Password is required.',
+                            minLength: { value: 8, message: 'Password must be at least 8 characters.' },
+                        })}
                     />
+                    {errors.password && (
+                        <p className="text-sm text-destructive">{errors.password.message}</p>
+                    )}
                 </div>
 
-                {error && (
-                    <p className="text-sm text-destructive">{error}</p>
+                {serverError && (
+                    <p className="text-sm text-destructive">{serverError}</p>
                 )}
 
                 <button
                     type="submit"
-                    disabled={loading}
+                    disabled={isSubmitting}
                     className="w-full bg-primary text-primary-foreground font-bold py-4 hover:opacity-90 active:scale-[0.98] transition-all duration-200 disabled:opacity-50">
-                    {loading ? 'Creating account...' : 'Create Account'}
+                    {isSubmitting ? 'Creating account...' : 'Create Account'}
                 </button>
             </form>
 
