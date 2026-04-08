@@ -2,21 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Folder,
-  Clock,
-  Star,
-  Users,
-  Settings,
-  HelpCircle,
-} from "lucide-react";
+import { Folder, Clock, Settings, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "All Files", icon: Folder },
   { href: "/dashboard?filter=recent", label: "Recent", icon: Clock },
-  { href: "/dashboard?filter=starred", label: "Starred", icon: Star },
-  { href: "/dashboard?filter=shared", label: "Team Space", icon: Users },
 ];
 
 export default function Sidebar() {
@@ -35,7 +26,7 @@ export default function Sidebar() {
               Workspace
             </h3>
             <p className="text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
-              Premium Tier
+              Personal
             </p>
           </div>
         </div>
@@ -76,11 +67,6 @@ export default function Sidebar() {
           <HelpCircle className="size-5" strokeWidth={1.5} />
           <span>Help</span>
         </button>
-        <div className="mt-4 px-2">
-          <button className="w-full rounded-sm bg-sidebar-accent py-2 text-xs font-bold uppercase tracking-widest text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent/80">
-            Invite Member
-          </button>
-        </div>
       </div>
     </aside>
   );

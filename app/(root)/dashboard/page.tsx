@@ -31,7 +31,6 @@ export default async function DashboardPage() {
       {/* Top Nav */}
       <DashboardHeader>
         <Notifications />
-        <AddDocumentBtn userId={user.id} email={user.email} />
         <UserButton
           name={user.name}
           email={user.email}
@@ -48,9 +47,12 @@ export default async function DashboardPage() {
           <div className="mx-auto max-w-6xl px-6 pb-16 pt-12 md:px-8">
             {/* Hero / Headline */}
             <header className="mb-20">
-              <h1 className="mb-4 text-5xl font-extrabold leading-tight tracking-tighter md:text-6xl">
-                Document Studio
-              </h1>
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-6xl">
+                  Document Studio
+                </h1>
+                <AddDocumentBtn userId={user.id} email={user.email} />
+              </div>
               <div className="flex items-center justify-between">
                 <p className="max-w-md text-lg leading-relaxed text-muted-foreground">
                   Organize your collaborative thoughts in an editorial
@@ -58,7 +60,7 @@ export default async function DashboardPage() {
                 </p>
                 {docCount > 0 && (
                   <span className="hidden text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground md:inline">
-                    {docCount} document{docCount !== 1 ? "s" : ""}
+                    {docCount} / 50 documents
                   </span>
                 )}
               </div>

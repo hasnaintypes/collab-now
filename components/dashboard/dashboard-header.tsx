@@ -22,26 +22,6 @@ export default function DashboardHeader({
         >
           CollabNow
         </Link>
-        <nav className="hidden items-center gap-8 text-sm font-medium tracking-tight md:flex">
-          <Link
-            href="/dashboard"
-            className="border-b border-foreground pb-1 text-foreground"
-          >
-            Documents
-          </Link>
-          <Link
-            href="/dashboard?filter=shared"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Shared
-          </Link>
-          <Link
-            href="/dashboard?filter=recent"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Archive
-          </Link>
-        </nav>
       </div>
       <div className="flex items-center gap-6">{children}</div>
     </header>
