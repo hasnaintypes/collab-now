@@ -32,6 +32,8 @@ import {
   AlignJustify,
   Undo2,
   Redo2,
+  List,
+  ChevronDown,
 } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
@@ -57,7 +59,7 @@ function ToolbarButton({
       disabled={disabled}
       aria-label={ariaLabel}
       className={cn(
-        "flex size-8 items-center justify-center rounded-md transition-colors hover:bg-muted disabled:opacity-30",
+        "p-2 transition-colors hover:bg-muted disabled:opacity-30",
         active && "bg-muted text-foreground"
       )}
     >
@@ -67,7 +69,7 @@ function ToolbarButton({
 }
 
 function Divider() {
-  return <div className="mx-1 h-5 w-px bg-border" />;
+  return <div className="h-6 w-px bg-border/30 mx-0.5" />;
 }
 
 export default function ToolbarPlugin() {
@@ -121,10 +123,11 @@ export default function ToolbarPlugin() {
     return $setBlocksType(selection, () => $createHeadingNode(type));
   }
 
-  const iconSize = "size-4";
+  const iconSize = "size-[20px]";
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b bg-background px-2 py-1.5">
+    <div className="flex items-center gap-1 bg-background/90 backdrop-blur border border-border/30 p-1 shadow-sm">
+      {/* Undo / Redo */}
       <ToolbarButton onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} disabled={!canUndo} ariaLabel="Undo">
         <Undo2 className={iconSize} />
       </ToolbarButton>
@@ -132,16 +135,7 @@ export default function ToolbarPlugin() {
         <Redo2 className={iconSize} />
       </ToolbarButton>
       <Divider />
-      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h1"))} active={activeBlock === "h1"} ariaLabel="Heading 1">
-        <Heading1 className={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h2"))} active={activeBlock === "h2"} ariaLabel="Heading 2">
-        <Heading2 className={iconSize} />
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h3"))} active={activeBlock === "h3"} ariaLabel="Heading 3">
-        <Heading3 className={iconSize} />
-      </ToolbarButton>
-      <Divider />
+      {/* Text Formatting */}
       <ToolbarButton onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold")} active={isBold} ariaLabel="Bold">
         <Bold className={iconSize} />
       </ToolbarButton>
@@ -155,6 +149,7 @@ export default function ToolbarPlugin() {
         <Strikethrough className={iconSize} />
       </ToolbarButton>
       <Divider />
+      {/* Alignment */}
       <ToolbarButton onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "left")} ariaLabel="Align Left">
         <AlignLeft className={iconSize} />
       </ToolbarButton>
@@ -166,6 +161,17 @@ export default function ToolbarPlugin() {
       </ToolbarButton>
       <ToolbarButton onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "justify")} ariaLabel="Justify">
         <AlignJustify className={iconSize} />
+      </ToolbarButton>
+      <Divider />
+      {/* Headings */}
+      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h1"))} active={activeBlock === "h1"} ariaLabel="Heading 1">
+        <Heading1 className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h2"))} active={activeBlock === "h2"} ariaLabel="Heading 2">
+        <Heading2 className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => editor.update(() => toggleBlock("h3"))} active={activeBlock === "h3"} ariaLabel="Heading 3">
+        <Heading3 className={iconSize} />
       </ToolbarButton>
     </div>
   );

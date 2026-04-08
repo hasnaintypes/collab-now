@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@liveblocks/react-ui/styles.css";
+@import "@liveblocks/react-ui/styles/dark/attributes.css";
+@import "@liveblocks/react-lexical/styles.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -186,4 +189,28 @@ body {
 .editor-link {
   color: var(--primary);
   text-decoration: underline;
+}
+
+/* Liveblocks UI — map accent & radius to our theme tokens.
+   Base light/dark colors come from the imported styles.css + dark/attributes.css
+   which responds to the .dark class set by next-themes. */
+.lb-root {
+  --lb-accent: oklch(0.205 0 0);
+  --lb-accent-foreground: oklch(0.985 0 0);
+  --lb-radius: var(--radius);
+  --lb-spacing: 0.75em;
+}
+
+.dark .lb-root {
+  --lb-accent: oklch(0.922 0 0);
+  --lb-accent-foreground: oklch(0.205 0 0);
+}
+
+/* Hide scrollbar while keeping scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

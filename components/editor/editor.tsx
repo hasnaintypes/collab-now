@@ -2,6 +2,9 @@
 
 import Theme from "./plugins/theme";
 import ToolbarPlugin from "./plugins/toolbar-plugin";
+import HeadingOutlinePlugin, {
+  type HeadingEntry,
+} from "./plugins/heading-outline-plugin";
 import { HeadingNode } from "@lexical/rich-text";
 import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
@@ -20,10 +23,11 @@ import FloatingToolbar from "./plugins/floating-toolbar";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/components/shared/comments";
 import Loader from "@/components/shared/loader";
+import { SlidersHorizontal } from "lucide-react";
 
 function Placeholder() {
   return (
-    <div className="pointer-events-none absolute left-8 top-8 text-muted-foreground">
+    <div className="pointer-events-none absolute left-0 top-0 text-muted-foreground text-lg">
       Start writing...
     </div>
   );
@@ -32,9 +36,13 @@ function Placeholder() {
 export function Editor({
   roomId,
   currentUserType,
+  onHeadingsChange,
+  scrollToHeadingRef,
 }: {
   roomId: string;
   currentUserType: UserType;
+  onHeadingsChange: (headings: HeadingEntry[]) => void;
+  scrollToHeadingRef: React.MutableRefObject<((key: string) => void) | null>;
 }) {
   const status = useIsEditorReady();
   const { threads } = useThreads();
@@ -52,31 +60,57 @@ export function Editor({
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <div className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs ring-1 ring-foreground/5">
-        <ToolbarPlugin />
-        <div className="flex flex-col items-center justify-start">
+      <HeadingOutlinePlugin
+        onHeadingsChange={onHeadingsChange}
+        scrollRef={scrollToHeadingRef}
+      />
+
+      <div className="flex flex-1 w-full">
+        {/* Editor Content Canvas */}
+        <div className="flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar">
+          {/* Floating Minimalist Toolbar */}
+          <div className="sticky top-4 z-10 mb-12">
+            <ToolbarPlugin />
+          </div>
+
+          {/* Writing Area (The "Page") */}
           {!status ? (
             <Loader className="min-h-[400px]" />
           ) : (
-            <div className="relative w-full max-w-[800px] min-h-[600px] px-8 py-8">
-              <RichTextPlugin
-                contentEditable={
-                  <ContentEditable className="outline-none min-h-[500px] text-foreground" />
-                }
-                placeholder={<Placeholder />}
-                ErrorBoundary={LexicalErrorBoundary}
-              />
+            <article className="max-w-3xl w-full bg-card p-16 shadow-[0_20px_50px_rgba(0,0,0,0.02)] min-h-[1000px] border border-border/10">
+              <div className="relative min-h-[800px]">
+                <RichTextPlugin
+                  contentEditable={
+                    <ContentEditable className="outline-none min-h-[800px] text-foreground text-[1.125rem] leading-[1.8]" />
+                  }
+                  placeholder={<Placeholder />}
+                  ErrorBoundary={LexicalErrorBoundary}
+                />
+              </div>
               {currentUserType === "editor" && <FloatingToolbar />}
               <HistoryPlugin />
               <AutoFocusPlugin />
-            </div>
+            </article>
           )}
-          <LiveblocksPlugin>
-            <FloatingComposer className="w-[350px]" />
-            <FloatingThreads threads={threads} />
-            <Comments />
-          </LiveblocksPlugin>
         </div>
+
+        {/* Inline Comments Sidebar — must be inside LiveblocksPlugin
+             because useIsThreadActive requires it */}
+        <LiveblocksPlugin>
+          <aside className="w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
+            <div className="flex items-center justify-between px-6 pt-10 pb-6">
+              <h3 className="uppercase tracking-widest text-[10px] font-bold text-muted-foreground">
+                Discussion
+              </h3>
+              <SlidersHorizontal className="size-3.5 text-muted-foreground cursor-pointer" />
+            </div>
+            <div className="px-4 pb-12">
+              <Comments />
+            </div>
+          </aside>
+          <FloatingComposer className="w-[350px]" />
+          <FloatingThreads threads={threads} />
+        </LiveblocksPlugin>
       </div>
     </LexicalComposer>
   );
