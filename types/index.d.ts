@@ -66,3 +66,7 @@ declare type CollaboratorProps = {
   collaborator: User;
   user: User;
 };
+
+declare type WorkspaceRole = "owner" | "admin" | "member";
+declare type InviteStatus = "pending" | "accepted" | "expired";
+declare type ActivityAction = "created" | "shared" | "deleted" | "renamed" | "invited" | "joined";
