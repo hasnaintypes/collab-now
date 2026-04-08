@@ -6,13 +6,23 @@ import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "../utils";
 import { redirect } from "next/navigation";
 
+const DOC_LIMIT = 50;
+
 export const createDocument = async ({
   userId,
   email,
 }: CreateDocumentParams) => {
-  const roomId = nanoid();
-
   try {
+    // Enforce 50-document limit
+    const existing = await liveblocks.getRooms({ userId: email });
+    if (existing.data && existing.data.length >= DOC_LIMIT) {
+      throw new Error(
+        `Document limit reached. You can have up to ${DOC_LIMIT} documents.`
+      );
+    }
+
+    const roomId = nanoid();
+
     const metadata = {
       creatorId: userId,
       email,
@@ -33,6 +43,7 @@ export const createDocument = async ({
     return parseStringify(room);
   } catch (error) {
     console.error(`Failed to create document: ${error}`);
+    throw error;
   }
 };
 
