@@ -5,9 +5,6 @@ import {
   FileText,
   Users,
   MessageSquare,
-  Mail,
-  Code,
-  MessageCircle,
   ArrowLeft,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
@@ -167,44 +164,6 @@ export default async function ProfilePage() {
 
           {/* Right Column: Sidebar */}
           <div className="space-y-16 lg:col-span-4">
-            {/* Integrations */}
-            <section className="space-y-6">
-              <h2 className="text-sm font-bold uppercase tracking-widest">
-                Integrations
-              </h2>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between bg-card p-5">
-                  <div className="flex items-center gap-3">
-                    <Mail className="size-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">
-                      Google Workspace
-                    </span>
-                  </div>
-                  <span className="bg-muted px-2 py-0.5 text-[10px] uppercase tracking-tight text-muted-foreground">
-                    Connected
-                  </span>
-                </div>
-                <div className="flex items-center justify-between bg-card p-5">
-                  <div className="flex items-center gap-3">
-                    <Code className="size-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">GitHub</span>
-                  </div>
-                  <span className="bg-muted px-2 py-0.5 text-[10px] uppercase tracking-tight text-muted-foreground">
-                    Connected
-                  </span>
-                </div>
-                <div className="flex items-center justify-between bg-card p-5 opacity-50">
-                  <div className="flex items-center gap-3">
-                    <MessageCircle className="size-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">Slack</span>
-                  </div>
-                  <span className="border border-border px-2 py-0.5 text-[10px] uppercase tracking-tight text-muted-foreground">
-                    Disconnected
-                  </span>
-                </div>
-              </div>
-            </section>
-
             {/* Recent Documents */}
             <section className="space-y-6">
               <h2 className="text-sm font-bold uppercase tracking-widest">

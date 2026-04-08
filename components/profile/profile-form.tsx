@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { updateUser } from "@/lib/auth-client";
 import { Input } from "@/components/ui/input";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, Upload } from "lucide-react";
 
 interface ProfileFormProps {
   name: string;
@@ -14,16 +14,31 @@ interface ProfileFormProps {
 
 export default function ProfileForm({ name, image }: ProfileFormProps) {
   const [editing, setEditing] = useState(false);
+  const [preview, setPreview] = useState<string>(image);
+  const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { isSubmitting },
   } = useForm({
     defaultValues: { name, image },
   });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setPreview(base64);
+      setValue("image", base64);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const onSubmit = async (data: { name: string; image: string }) => {
     try {
@@ -40,6 +55,7 @@ export default function ProfileForm({ name, image }: ProfileFormProps) {
 
   const handleCancel = () => {
     reset({ name, image });
+    setPreview(image);
     setEditing(false);
   };
 
@@ -60,6 +76,41 @@ export default function ProfileForm({ name, image }: ProfileFormProps) {
       onSubmit={handleSubmit(onSubmit)}
       className="w-full max-w-md space-y-4 rounded-sm bg-muted/50 p-6"
     >
+      {/* Avatar upload */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          Profile Picture
+        </label>
+        <div className="flex items-center gap-4">
+          {preview ? (
+            <img
+              src={preview}
+              alt="Preview"
+              className="size-16 rounded-sm object-cover"
+            />
+          ) : (
+            <div className="flex size-16 items-center justify-center bg-muted text-lg font-bold text-muted-foreground rounded-sm">
+              {name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-sm border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Upload className="size-4" />
+            Upload Photo
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+      </div>
+
       <div className="space-y-1.5">
         <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
           Full Name
@@ -70,16 +121,7 @@ export default function ProfileForm({ name, image }: ProfileFormProps) {
           className="h-9"
         />
       </div>
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Avatar URL
-        </label>
-        <Input
-          {...register("image")}
-          placeholder="https://example.com/avatar.jpg"
-          className="h-9"
-        />
-      </div>
+
       <div className="flex items-center gap-3 pt-2">
         <button
           type="submit"
