@@ -15,15 +15,6 @@ import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
 import ProfileForm from "@/components/profile/profile-form";
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 export default async function ProfilePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
@@ -53,35 +44,15 @@ export default async function ProfilePage() {
           Back to dashboard
         </Link>
 
-        {/* Profile Header */}
-        <section className="mb-16 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-col items-start gap-8 md:flex-row md:items-center">
-            <div className="relative group">
-              {user.image ? (
-                <img
-                  src={user.image}
-                  alt={user.name}
-                  className="size-36 rounded-none object-cover grayscale brightness-105 md:size-48"
-                />
-              ) : (
-                <div className="flex size-36 items-center justify-center bg-muted text-4xl font-bold text-muted-foreground md:size-48 md:text-5xl">
-                  {getInitials(user.name)}
-                </div>
-              )}
-              <div className="absolute inset-0 bg-primary/5 opacity-0 transition-opacity group-hover:opacity-100" />
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-5xl font-extrabold tracking-tighter md:text-7xl">
-                {user.name}
-              </h1>
-              <p className="text-lg uppercase tracking-widest text-muted-foreground">
-                {user.email}
-              </p>
-            </div>
-          </div>
-          <div className="pb-2">
-            <ProfileForm name={user.name} image={user.image || ""} />
-          </div>
+        {/* Profile Header — avatar + name are inline-editable via ProfileForm */}
+        <section className="mb-16 flex flex-col items-start gap-8 md:flex-row md:items-center">
+          <ProfileForm
+            name={user.name}
+            email={user.email}
+            image={user.image || ""}
+            createdAt={user.createdAt.toString()}
+            emailVerified={!!user.emailVerified}
+          />
         </section>
 
         <div className="grid grid-cols-1 gap-x-16 gap-y-16 lg:grid-cols-12">
@@ -124,42 +95,7 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            {/* Personal Information */}
-            <section className="space-y-8">
-              <h2 className="text-2xl font-bold tracking-tight">
-                Personal Information
-              </h2>
-              <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
-                <div className="space-y-1.5 border-b border-border/50 pb-4">
-                  <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Full Name
-                  </label>
-                  <p className="text-base">{user.name}</p>
-                </div>
-                <div className="space-y-1.5 border-b border-border/50 pb-4">
-                  <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Email Address
-                  </label>
-                  <p className="text-base">{user.email}</p>
-                </div>
-                <div className="space-y-1.5 border-b border-border/50 pb-4">
-                  <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Member Since
-                  </label>
-                  <p className="text-base">
-                    {dateConverter(user.createdAt.toString())}
-                  </p>
-                </div>
-                <div className="space-y-1.5 border-b border-border/50 pb-4">
-                  <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Account Status
-                  </label>
-                  <p className="text-base">
-                    {user.emailVerified ? "Verified" : "Unverified"}
-                  </p>
-                </div>
-              </div>
-            </section>
+            {/* Personal Information — rendered inside ProfileForm */}
           </div>
 
           {/* Right Column: Sidebar */}

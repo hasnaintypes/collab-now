@@ -2,144 +2,214 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
 import { updateUser } from "@/lib/auth-client";
 import { Input } from "@/components/ui/input";
-import { Pencil, Check, X, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Camera, Check, X, Upload, Pencil } from "lucide-react";
 
 interface ProfileFormProps {
   name: string;
+  email: string;
   image: string;
+  createdAt: string;
+  emailVerified: boolean;
 }
 
-export default function ProfileForm({ name, image }: ProfileFormProps) {
-  const [editing, setEditing] = useState(false);
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+export default function ProfileForm({
+  name,
+  email,
+  image,
+  createdAt,
+  emailVerified,
+}: ProfileFormProps) {
+  const [editingName, setEditingName] = useState(false);
+  const [currentName, setCurrentName] = useState(name);
+  const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<string>(image);
   const fileRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    formState: { isSubmitting },
-  } = useForm({
-    defaultValues: { name, image },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const base64 = reader.result as string;
       setPreview(base64);
-      setValue("image", base64);
+      setSaving(true);
+      try {
+        await updateUser({ image: base64 });
+        router.refresh();
+      } catch (error) {
+        console.error("Failed to update avatar:", error);
+        setPreview(image);
+      }
+      setSaving(false);
     };
     reader.readAsDataURL(file);
   };
 
-  const onSubmit = async (data: { name: string; image: string }) => {
+  const handleNameSave = async () => {
+    if (!currentName.trim() || currentName.trim().length < 2) return;
+    setSaving(true);
     try {
-      await updateUser({
-        name: data.name,
-        image: data.image || undefined,
-      });
-      setEditing(false);
+      await updateUser({ name: currentName.trim() });
+      setEditingName(false);
       router.refresh();
     } catch (error) {
-      console.error("Failed to update profile:", error);
+      console.error("Failed to update name:", error);
+      setCurrentName(name);
     }
+    setSaving(false);
   };
 
-  const handleCancel = () => {
-    reset({ name, image });
-    setPreview(image);
-    setEditing(false);
+  const handleNameCancel = () => {
+    setCurrentName(name);
+    setEditingName(false);
   };
 
-  if (!editing) {
-    return (
-      <button
-        onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-2 bg-primary px-8 py-3.5 text-sm font-medium uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90"
-      >
-        <Pencil className="size-4" />
-        Edit Profile
-      </button>
-    );
-  }
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleNameSave();
+    if (e.key === "Escape") handleNameCancel();
+  };
+
+  const startEditingName = () => {
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+  };
+
+  const formattedDate = new Date(createdAt).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="w-full max-w-md space-y-4 rounded-sm bg-muted/50 p-6"
-    >
-      {/* Avatar upload */}
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Profile Picture
-        </label>
-        <div className="flex items-center gap-4">
-          {preview ? (
-            <img
-              src={preview}
-              alt="Preview"
-              className="size-16 rounded-sm object-cover"
-            />
-          ) : (
-            <div className="flex size-16 items-center justify-center bg-muted text-lg font-bold text-muted-foreground rounded-sm">
-              {name.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-sm border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-          >
-            <Upload className="size-4" />
-            Upload Photo
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
+    <>
+      {/* Avatar with edit overlay */}
+      <div className="relative group cursor-pointer" onClick={() => fileRef.current?.click()}>
+        {preview ? (
+          <img
+            src={preview}
+            alt={currentName}
+            className="size-36 rounded-none object-cover grayscale brightness-105 md:size-48"
           />
+        ) : (
+          <div className="flex size-36 items-center justify-center bg-muted text-4xl font-bold text-muted-foreground md:size-48 md:text-5xl">
+            {getInitials(currentName)}
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+          <Camera className="size-8 text-white" />
         </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Full Name
-        </label>
-        <Input
-          {...register("name", { required: true, minLength: 2 })}
-          placeholder="Your name"
-          className="h-9"
+        {saving && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span className="text-xs font-medium text-white">Saving...</span>
+          </div>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
         />
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex items-center gap-2 bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <Check className="size-4" />
-          {isSubmitting ? "Saving..." : "Save"}
-        </button>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <X className="size-4" />
-          Cancel
-        </button>
+      {/* Name + Email (name is editable inline) */}
+      <div className="space-y-2">
+        {editingName ? (
+          <div className="flex items-center gap-2">
+            <Input
+              ref={nameInputRef}
+              value={currentName}
+              onChange={(e) => setCurrentName(e.target.value)}
+              onKeyDown={handleNameKeyDown}
+              className="h-auto border-border/50 px-2 py-1 text-5xl font-extrabold tracking-tighter md:text-7xl"
+            />
+            <button
+              onClick={handleNameSave}
+              disabled={saving}
+              className="rounded-sm bg-primary p-2 text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <Check className="size-5" />
+            </button>
+            <button
+              onClick={handleNameCancel}
+              className="rounded-sm p-2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={startEditingName}
+            className="group flex items-center gap-3 text-left"
+          >
+            <h1 className="text-5xl font-extrabold tracking-tighter md:text-7xl">
+              {currentName}
+            </h1>
+            <Pencil className="size-5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          </button>
+        )}
+        <p className="text-lg uppercase tracking-widest text-muted-foreground">
+          {email}
+        </p>
       </div>
-    </form>
+
+      {/* Personal Information — inline editable name field */}
+      <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
+        <div className="space-y-1.5 border-b border-border/50 pb-4">
+          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Full Name
+          </label>
+          {editingName ? (
+            <Input
+              value={currentName}
+              onChange={(e) => setCurrentName(e.target.value)}
+              onKeyDown={handleNameKeyDown}
+              className="h-8 text-base"
+            />
+          ) : (
+            <button
+              onClick={startEditingName}
+              className="group flex w-full items-center justify-between text-left"
+            >
+              <p className="text-base">{currentName}</p>
+              <Pencil className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          )}
+        </div>
+        <div className="space-y-1.5 border-b border-border/50 pb-4">
+          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Email Address
+          </label>
+          <p className="text-base">{email}</p>
+        </div>
+        <div className="space-y-1.5 border-b border-border/50 pb-4">
+          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Member Since
+          </label>
+          <p className="text-base">{formattedDate}</p>
+        </div>
+        <div className="space-y-1.5 border-b border-border/50 pb-4">
+          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Account Status
+          </label>
+          <p className="text-base">
+            {emailVerified ? "Verified" : "Unverified"}
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
