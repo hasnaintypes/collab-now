@@ -6,6 +6,8 @@ import HeadingOutlinePlugin, {
   type HeadingEntry,
 } from "./plugins/heading-outline-plugin";
 import { HeadingNode } from "@lexical/rich-text";
+import { ListNode, ListItemNode } from "@lexical/list";
+import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
@@ -52,7 +54,7 @@ export function Editor({
 
   const initialConfig = liveblocksConfig({
     namespace: "Editor",
-    nodes: [HeadingNode],
+    nodes: [HeadingNode, ListNode, ListItemNode],
     onError: (error: Error) => {
       console.error(error);
       throw error;
@@ -71,7 +73,7 @@ export function Editor({
 
       <div className="flex flex-1 w-full">
         {/* Editor Content Canvas */}
-        <div className="flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar">
+        <div className="flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar xl:mr-80">
           {/* Floating Minimalist Toolbar */}
           <div className="sticky top-4 z-10 mb-12">
             <ToolbarPlugin />
@@ -81,7 +83,7 @@ export function Editor({
           {!status ? (
             <Loader className="min-h-[400px]" />
           ) : (
-            <article className="max-w-3xl w-full bg-card p-16 shadow-[0_20px_50px_rgba(0,0,0,0.02)] min-h-[1000px] border border-border/10">
+            <article className="max-w-4xl w-full bg-card p-16 shadow-[0_20px_50px_rgba(0,0,0,0.02)] min-h-[1000px] border border-border/10">
               <div className="relative min-h-[800px]">
                 <RichTextPlugin
                   contentEditable={
@@ -92,16 +94,16 @@ export function Editor({
                 />
               </div>
               {currentUserType === "editor" && <FloatingToolbar />}
+              <ListPlugin />
               <HistoryPlugin />
               <AutoFocusPlugin />
             </article>
           )}
         </div>
 
-        {/* Inline Comments Sidebar — must be inside LiveblocksPlugin
-             because useIsThreadActive requires it */}
+        {/* Inline Comments Sidebar — fixed position so it doesn't scroll with content */}
         <LiveblocksPlugin>
-          <aside className="w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
+          <aside className="fixed right-0 top-16 h-[calc(100vh-64px)] w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
             <div className="flex items-center justify-between px-6 pt-10 pb-6">
               <h3 className="uppercase tracking-widest text-[10px] font-bold text-muted-foreground">
                 Discussion

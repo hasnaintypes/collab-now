@@ -19,6 +19,12 @@ import { $createHeadingNode, $isHeadingNode } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
 import { $findMatchingParent } from "@lexical/utils";
 import {
+  INSERT_ORDERED_LIST_COMMAND,
+  INSERT_UNORDERED_LIST_COMMAND,
+  REMOVE_LIST_COMMAND,
+} from "@lexical/list";
+import { $isListNode } from "@lexical/list";
+import {
   Bold,
   Italic,
   Underline,
@@ -33,7 +39,7 @@ import {
   Undo2,
   Redo2,
   List,
-  ChevronDown,
+  ListOrdered,
 } from "lucide-react";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
@@ -123,6 +129,19 @@ export default function ToolbarPlugin() {
     return $setBlocksType(selection, () => $createHeadingNode(type));
   }
 
+  function toggleList(type: "bullet" | "number") {
+    if (
+      (type === "bullet" && activeBlock === "bullet") ||
+      (type === "number" && activeBlock === "number")
+    ) {
+      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined);
+    } else if (type === "bullet") {
+      editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined);
+    } else {
+      editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+    }
+  }
+
   const iconSize = "size-[20px]";
 
   return (
@@ -173,6 +192,14 @@ export default function ToolbarPlugin() {
       <ToolbarButton onClick={() => editor.update(() => toggleBlock("h3"))} active={activeBlock === "h3"} ariaLabel="Heading 3">
         <Heading3 className={iconSize} />
       </ToolbarButton>
+      <Divider />
+      {/* Lists */}
+      <ToolbarButton onClick={() => toggleList("bullet")} active={activeBlock === "bullet"} ariaLabel="Bullet List">
+        <List className={iconSize} />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => toggleList("number")} active={activeBlock === "number"} ariaLabel="Numbered List">
+        <ListOrdered className={iconSize} />
+      </ToolbarButton>
     </div>
   );
 }
@@ -197,6 +224,10 @@ function useActiveBlock() {
             });
       if (element === null) element = anchor.getTopLevelElementOrThrow();
       if ($isHeadingNode(element)) return element.getTag();
+      if ($isListNode(element)) {
+        const listType = element.getListType();
+        return listType === "number" ? "number" : "bullet";
+      }
       return element.getType();
     });
   }, [editor]);

@@ -206,6 +206,110 @@ body {
   --lb-accent-foreground: oklch(0.205 0 0);
 }
 
+/* Hide "Powered by Liveblocks" branding */
+.lb-root [data-link="https://liveblocks.io"],
+.lb-root a[href*="liveblocks.io"],
+[class*="lb-"] a[href*="liveblocks.io"] {
+  display: none !important;
+}
+
+/* Liveblocks thread/comment overrides to match app theme */
+.lb-root {
+  --lb-dynamic-background: var(--background) !important;
+  --lb-background: var(--background) !important;
+  --lb-foreground: var(--foreground) !important;
+  --lb-muted: var(--muted) !important;
+  --lb-muted-foreground: var(--muted-foreground) !important;
+  --lb-border: var(--border) !important;
+  color: var(--foreground);
+}
+
+.lb-root .lb-composer,
+.lb-root .lb-thread {
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.lb-root .lb-thread {
+  background: var(--background) !important;
+}
+
+.lb-root .lb-comment {
+  font-size: 0.8125rem;
+  color: var(--foreground) !important;
+}
+
+.lb-root .lb-comment-body {
+  color: var(--foreground) !important;
+}
+
+.lb-root .lb-comment-author {
+  color: var(--foreground) !important;
+}
+
+.lb-root .lb-comment-date {
+  color: var(--muted-foreground) !important;
+}
+
+.lb-root .lb-composer-editor {
+  font-size: 0.8125rem;
+  color: var(--foreground) !important;
+  background: var(--background) !important;
+}
+
+.lb-root .lb-composer-placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.lb-root .lb-composer-action,
+.lb-root .lb-button {
+  color: var(--muted-foreground) !important;
+}
+
+.lb-root .lb-composer-action:hover,
+.lb-root .lb-button:hover {
+  color: var(--foreground) !important;
+}
+
+.lb-root .lb-composer-send-button {
+  color: var(--primary) !important;
+}
+
+.lb-root .lb-thread-comments {
+  background: var(--background) !important;
+}
+
+.lb-root .lb-composer-form {
+  background: var(--background) !important;
+  border-color: var(--border) !important;
+}
+
+.lb-root .lb-thread,
+.lb-root .lb-composer {
+  margin: 0 !important;
+}
+
+/* Lexical list styles */
+.editor-list-ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.editor-list-ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.editor-listitem {
+  margin-bottom: 0.25rem;
+  line-height: 1.75;
+}
+.editor-nested-listitem {
+  list-style-type: none;
+}
+
 /* Hide scrollbar while keeping scroll functionality */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
