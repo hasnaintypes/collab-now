@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { LogoIcon } from "@/components/logo";
 
 export default function DashboardHeader({
   children,
@@ -21,8 +22,9 @@ export default function DashboardHeader({
         {mobileSidebar}
         <Link
           href="/dashboard"
-          className="text-xl font-bold tracking-tighter"
+          className="flex items-center gap-1.5 text-xl font-bold tracking-tighter"
         >
+          <LogoIcon size={24} />
           CollabNow
         </Link>
       </div>

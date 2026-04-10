@@ -4,6 +4,7 @@ import { RoomProvider, ClientSideSuspense } from "@liveblocks/react/suspense";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Pencil, FileText, X } from "lucide-react";
 import Link from "next/link";
+import { LogoIcon } from "@/components/logo";
 import { Input } from "@/components/ui/input";
 import { updateDocument } from "@/lib/actions/room.actions";
 import ActiveCollaborators from "./active-collaborators";
@@ -86,8 +87,9 @@ export default function CollaborativeRoom({
             <div className="flex items-center gap-8">
               <Link
                 href="/dashboard"
-                className="font-extrabold tracking-tighter text-xl"
+                className="flex items-center gap-1.5 font-extrabold tracking-tighter text-xl"
               >
+                <LogoIcon size={24} />
                 CollabNow
               </Link>
             </div>

@@ -17,9 +17,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Collab Now — Real-Time Collaborative Documents",
+  title: "CollabNow — Real-Time Collaborative Documents",
   description:
     "Create, edit, and share rich-text documents in real time with your team. Powered by Liveblocks and Lexical.",
+  icons: {
+    icon: [
+      { url: "/light-icon.png", media: "(prefers-color-scheme: light)" },
+      { url: "/dark-icon.png", media: "(prefers-color-scheme: dark)" },
+    ],
+    apple: "/light-icon.png",
+  },
 };
 
 export default function RootLayout({
