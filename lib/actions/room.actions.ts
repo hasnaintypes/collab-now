@@ -5,12 +5,15 @@ import { liveblocks } from "../liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "../utils";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { document } from "@/db/schema/app";
 
 const DOC_LIMIT = 50;
 
 export const createDocument = async ({
   userId,
   email,
+  workspaceId,
 }: CreateDocumentParams) => {
   try {
     // Enforce 50-document limit
@@ -38,6 +41,16 @@ export const createDocument = async ({
       usersAccesses,
       defaultAccesses: [],
     });
+
+    // Also insert into local document table
+    if (workspaceId) {
+      await db.insert(document).values({
+        roomId,
+        title: "Untitled document",
+        creatorId: userId,
+        workspaceId,
+      });
+    }
 
     revalidatePath("/dashboard");
     return parseStringify(room);

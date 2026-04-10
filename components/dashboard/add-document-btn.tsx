@@ -3,12 +3,12 @@
 import { createDocument } from "@/lib/actions/room.actions";
 import { useRouter } from "next/navigation";
 
-export default function AddDocumentBtn({ userId, email }: AddDocumentBtnProps) {
+export default function AddDocumentBtn({ userId, email, workspaceId }: AddDocumentBtnProps) {
   const router = useRouter();
 
   const handleAdd = async () => {
     try {
-      const room = await createDocument({ userId, email });
+      const room = await createDocument({ userId, email, workspaceId });
       if (room) router.push(`/documents/${room.id}`);
     } catch (error) {
       console.error(`Failed to create document: ${error}`);
