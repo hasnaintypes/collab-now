@@ -3,9 +3,11 @@ import { cn } from "@/lib/utils";
 
 export default function DashboardHeader({
   children,
+  mobileSidebar,
   className,
 }: {
   children?: React.ReactNode;
+  mobileSidebar?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -15,7 +17,8 @@ export default function DashboardHeader({
         className
       )}
     >
-      <div className="flex items-center gap-12">
+      <div className="flex items-center gap-4">
+        {mobileSidebar}
         <Link
           href="/dashboard"
           className="text-xl font-bold tracking-tighter"

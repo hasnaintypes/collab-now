@@ -13,6 +13,7 @@ declare type RoomMetadata = {
 declare type CreateDocumentParams = {
   userId: string;
   email: string;
+  workspaceId?: string;
 };
 
 declare type User = {
@@ -55,6 +56,19 @@ declare type CollaborativeRoomProps = {
 declare type AddDocumentBtnProps = {
   userId: string;
   email: string;
+  workspaceId?: string;
+};
+
+declare type SidebarProps = {
+  workspaceName: string;
+  workspaceRole: WorkspaceRole;
+  memberCount: number;
+  workspaceId: string;
+};
+
+declare type InviteMemberDialogProps = {
+  workspaceId: string;
+  invitedById: string;
 };
 
 declare type DeleteModalProps = { roomId: string };
@@ -70,3 +84,9 @@ declare type CollaboratorProps = {
 declare type WorkspaceRole = "owner" | "admin" | "member";
 declare type InviteStatus = "pending" | "accepted" | "expired";
 declare type ActivityAction = "created" | "shared" | "deleted" | "renamed" | "invited" | "joined";
+
+declare type RoomDocument = {
+  id: string;
+  metadata: { title: string };
+  createdAt: string;
+};

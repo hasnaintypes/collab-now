@@ -1,35 +1,57 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Link from "next/link";
-import { FileText, Share2, Trash2, LayoutGrid, List, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getDocuments } from "@/lib/actions/room.actions";
-import { dateConverter } from "@/lib/utils";
+import { getOrCreateWorkspace } from "@/lib/actions/workspace.actions";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
 import AddDocumentBtn from "@/components/dashboard/add-document-btn";
-import DeleteDocumentDialog from "@/components/dashboard/delete-document-dialog";
+import DocumentsSection from "@/components/dashboard/documents-section";
+import MobileSidebar from "@/components/dashboard/mobile-sidebar";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
 import Sidebar from "@/components/dashboard/sidebar";
 
-interface RoomDocument {
-  id: string;
-  metadata: { title: string };
-  createdAt: string;
-}
-
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
   const user = session.user;
 
+  const { filter } = await searchParams;
+
   const roomDocuments = await getDocuments(user.email);
-  const docCount = roomDocuments?.data?.length || 0;
+  const allDocs: RoomDocument[] = roomDocuments?.data ?? [];
+  const docCount = allDocs.length;
+
+  // Server-side filter
+  let filteredDocs = allDocs;
+  if (filter === "recent") {
+    filteredDocs = [...allDocs]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+  }
+
+  const workspaceData = await getOrCreateWorkspace(user.id, user.name);
+
+  const sidebarProps = {
+    workspaceName: workspaceData.name,
+    workspaceRole: workspaceData.role,
+    memberCount: workspaceData.memberCount,
+    workspaceId: workspaceData.id,
+    userId: user.id,
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Top Nav */}
-      <DashboardHeader>
+      <DashboardHeader
+        mobileSidebar={<MobileSidebar {...sidebarProps} />}
+      >
         <Notifications />
         <UserButton
           name={user.name}
@@ -40,7 +62,7 @@ export default async function DashboardPage() {
 
       <div className="flex flex-1">
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar {...sidebarProps} />
 
         {/* Main Content */}
         <main className="flex-1 md:ml-64">
@@ -51,7 +73,7 @@ export default async function DashboardPage() {
                 <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-6xl">
                   Document Studio
                 </h1>
-                <AddDocumentBtn userId={user.id} email={user.email} />
+                <AddDocumentBtn userId={user.id} email={user.email} workspaceId={workspaceData.id} />
               </div>
               <div className="flex items-center justify-between">
                 <p className="max-w-md text-lg leading-relaxed text-muted-foreground">
@@ -67,74 +89,13 @@ export default async function DashboardPage() {
             </header>
 
             {/* Documents Section */}
-            <section>
-              <div className="mb-8 flex items-center justify-between px-2">
-                <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  All Documents
-                </h2>
-                <div className="flex gap-4 text-muted-foreground">
-                  <LayoutGrid className="size-5 cursor-pointer transition-colors hover:text-foreground" />
-                  <List className="size-5 cursor-pointer text-foreground" />
-                </div>
-              </div>
-
-              {roomDocuments?.data?.length > 0 ? (
-                <div className="space-y-3">
-                  {roomDocuments.data.map(
-                    ({ id, metadata, createdAt }: RoomDocument) => (
-                      <div
-                        key={id}
-                        className="group flex items-center justify-between rounded-sm bg-muted/40 p-5 transition-all duration-300 hover:bg-card hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]"
-                      >
-                        <Link
-                          href={`/documents/${id}`}
-                          className="flex flex-1 items-center gap-5"
-                        >
-                          <div className="flex size-12 shrink-0 items-center justify-center rounded-sm bg-muted">
-                            <FileText className="size-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <h4 className="text-base font-bold tracking-tight">
-                              {metadata.title}
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              Created {dateConverter(createdAt)}
-                            </p>
-                          </div>
-                        </Link>
-
-                        <div className="flex items-center gap-6">
-                          {/* Hover actions */}
-                          <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                            <Link
-                              href={`/documents/${id}`}
-                              className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
-                            >
-                              <Share2 className="size-[18px]" />
-                            </Link>
-                            <DeleteDocumentDialog roomId={id} />
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border/50 py-24 text-center">
-                  <div className="mb-5 flex size-16 items-center justify-center rounded-sm bg-muted">
-                    <FileText className="size-8 text-muted-foreground" />
-                  </div>
-                  <h2 className="mb-2 text-xl font-bold tracking-tight">
-                    No documents yet
-                  </h2>
-                  <p className="mb-8 max-w-sm text-sm text-muted-foreground">
-                    Create your first document to start collaborating with your
-                    team.
-                  </p>
-                  <AddDocumentBtn userId={user.id} email={user.email} />
-                </div>
-              )}
-            </section>
+            <DocumentsSection
+              documents={filteredDocs}
+              userId={user.id}
+              email={user.email}
+              workspaceId={workspaceData.id}
+              activeFilter={filter ?? "all"}
+            />
 
             {/* Bottom Bento Widgets */}
             <section className="mt-20 grid grid-cols-1 gap-6 md:grid-cols-12">
