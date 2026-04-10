@@ -35,7 +35,7 @@ export default function Notifications() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[360px] p-0">
         <div className="border-b px-4 py-3">
-          <p className="text-sm font-medium">Notifications</p>
+          <p className="text-sm font-semibold tracking-tight">Notifications</p>
         </div>
         <LiveblocksUiConfig
           overrides={{

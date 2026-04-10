@@ -68,7 +68,7 @@ export default function UserButton({
             </div>
           )}
           <div className="flex flex-col overflow-hidden">
-            <p className="truncate text-sm font-medium">{name}</p>
+            <p className="truncate text-sm font-semibold tracking-tight">{name}</p>
             <p className="truncate text-xs text-muted-foreground">{email}</p>
           </div>
         </div>

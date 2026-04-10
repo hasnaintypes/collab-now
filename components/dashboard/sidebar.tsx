@@ -31,8 +31,8 @@ export function SidebarContent({
           <div className="flex size-10 items-center justify-center rounded-sm bg-sidebar-primary font-bold text-sidebar-primary-foreground">
             {workspaceName?.charAt(0)?.toUpperCase() || "W"}
           </div>
-          <div>
-            <h3 className="text-sm font-bold tracking-tight text-sidebar-foreground">
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-bold tracking-tight text-sidebar-foreground">
               {workspaceName || "Workspace"}
             </h3>
             <p className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-sidebar-foreground/50">
@@ -77,14 +77,22 @@ export function SidebarContent({
             invitedById={userId}
           />
         )}
-        <button className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50">
+        <Link
+          href="/settings"
+          onClick={onNavClick}
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50"
+        >
           <Settings className="size-5" strokeWidth={1.5} />
           <span>Settings</span>
-        </button>
-        <button className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50">
+        </Link>
+        <Link
+          href="/help"
+          onClick={onNavClick}
+          className="flex w-full items-center gap-3 px-3 py-2.5 text-sm text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/50"
+        >
           <HelpCircle className="size-5" strokeWidth={1.5} />
           <span>Help</span>
-        </button>
+        </Link>
       </div>
     </>
   );
