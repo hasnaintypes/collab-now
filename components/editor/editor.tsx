@@ -20,6 +20,7 @@ import {
   useIsEditorReady,
 } from "@liveblocks/react-lexical";
 import FloatingToolbar from "./plugins/floating-toolbar";
+import WordCountPlugin from "./plugins/word-count-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/components/shared/comments";
 import Loader from "@/components/shared/loader";
@@ -37,11 +38,13 @@ export function Editor({
   roomId,
   currentUserType,
   onHeadingsChange,
+  onWordCountChange,
   scrollToHeadingRef,
 }: {
   roomId: string;
   currentUserType: UserType;
   onHeadingsChange: (headings: HeadingEntry[]) => void;
+  onWordCountChange?: (wordCount: number) => void;
   scrollToHeadingRef: React.MutableRefObject<((key: string) => void) | null>;
 }) {
   const status = useIsEditorReady();
@@ -64,6 +67,7 @@ export function Editor({
         onHeadingsChange={onHeadingsChange}
         scrollRef={scrollToHeadingRef}
       />
+      {onWordCountChange && <WordCountPlugin onChange={onWordCountChange} />}
 
       <div className="flex flex-1 w-full">
         {/* Editor Content Canvas */}

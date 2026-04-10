@@ -29,8 +29,17 @@ export default function ShareDialog({
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [userType, setUserType] = useState<UserType>("viewer");
+  const [error, setError] = useState("");
+
+  const isValidEmail = (value: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const handleShare = async () => {
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    setError("");
     setLoading(true);
     await updateDocumentAccess({
       roomId,
@@ -79,6 +88,9 @@ export default function ShareDialog({
               {loading ? "Sending..." : "Invite"}
             </Button>
           </div>
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
         </div>
 
         <Separator className="my-4" />

@@ -26,6 +26,7 @@ export default function CollaborativeRoom({
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
+  const [wordCount, setWordCount] = useState(0);
   const [outlineVisible, setOutlineVisible] = useState(true);
   const [activeHeadingKey, setActiveHeadingKey] = useState<string | null>(null);
 
@@ -35,6 +36,10 @@ export default function CollaborativeRoom({
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
     setHeadings(h);
+  }, []);
+
+  const handleWordCountChange = useCallback((count: number) => {
+    setWordCount(count);
   }, []);
 
   const handleTitleKeyDown = async (
@@ -235,6 +240,7 @@ export default function CollaborativeRoom({
               roomId={roomId}
               currentUserType={currentUserType}
               onHeadingsChange={handleHeadingsChange}
+              onWordCountChange={handleWordCountChange}
               scrollToHeadingRef={scrollToHeadingRef}
             />
           </main>
@@ -245,8 +251,11 @@ export default function CollaborativeRoom({
               <span className="text-foreground">
                 {currentUserType === "editor" ? "Editing" : "Viewing"}
               </span>
-              <span className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors duration-200">
-                Read Time: ~1m
+              <span className="text-muted-foreground">
+                {wordCount} {wordCount === 1 ? "word" : "words"}
+              </span>
+              <span className="text-muted-foreground">
+                ~{Math.max(1, Math.round(wordCount / 200))}m read
               </span>
               <span className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors duration-200">
                 English (US)
