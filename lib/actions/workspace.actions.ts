@@ -9,10 +9,10 @@ import {
   activityLog,
 } from "@/db/schema/app";
 import { user } from "@/db/schema/auth";
-import { eq, and, ilike, or, gt, notInArray, count } from "drizzle-orm";
+import { eq, and, ilike, or, gt, notInArray, count, desc } from "drizzle-orm";
 import { parseStringify } from "../utils";
-import { sendMail } from "../mail";
-import { inviteEmailHtml } from "../mail-templates";
+import { sendMail } from "@/lib/email/send";
+import { inviteEmailHtml } from "@/lib/email/templates/invite";
 
 export const getOrCreateWorkspace = async (
   userId: string,
@@ -363,5 +363,29 @@ export const getPendingInvites = async (workspaceId: string) => {
   } catch (error) {
     console.error(`Failed to get pending invites: ${error}`);
     throw error;
+  }
+};
+
+export const getRecentActivity = async (workspaceId: string, limit = 5) => {
+  try {
+    const activities = await db
+      .select({
+        id: activityLog.id,
+        action: activityLog.action,
+        metadata: activityLog.metadata,
+        createdAt: activityLog.createdAt,
+        userName: user.name,
+        userImage: user.image,
+      })
+      .from(activityLog)
+      .innerJoin(user, eq(activityLog.userId, user.id))
+      .where(eq(activityLog.workspaceId, workspaceId))
+      .orderBy(desc(activityLog.createdAt))
+      .limit(limit);
+
+    return parseStringify(activities);
+  } catch (error) {
+    console.error(`Failed to get recent activity: ${error}`);
+    return [];
   }
 };
