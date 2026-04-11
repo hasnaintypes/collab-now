@@ -5,8 +5,11 @@ import { liveblocks } from "../liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "../utils";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { document } from "@/db/schema/app";
+import { document, activityLog } from "@/db/schema/app";
+import { sendMail } from "@/lib/email/send";
+import { documentShareEmailHtml } from "@/lib/email/templates/document-share";
 
 const DOC_LIMIT = 50;
 
@@ -49,6 +52,13 @@ export const createDocument = async ({
         title: "Untitled document",
         creatorId: userId,
         workspaceId,
+      });
+
+      await db.insert(activityLog).values({
+        workspaceId,
+        userId,
+        action: "created",
+        metadata: JSON.stringify({ roomId, title: "Untitled document" }),
       });
     }
 
@@ -130,6 +140,21 @@ export const updateDocumentAccess = async ({
         },
         roomId,
       });
+
+      const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
+      const documentTitle =
+        (room.metadata as { title?: string }).title || "Untitled document";
+
+      void sendMail({
+        to: email,
+        subject: `${updatedBy.name} shared "${documentTitle}" with you`,
+        html: documentShareEmailHtml({
+          sharerName: updatedBy.name,
+          documentTitle,
+          accessType: userType,
+          documentUrl: `${baseUrl}/documents/${roomId}`,
+        }),
+      });
     }
 
     revalidatePath(`/documents/${roomId}`);
@@ -164,12 +189,57 @@ export const removeCollaborator = async ({
   }
 };
 
+export const getDocumentCollaborators = async (roomId: string) => {
+  try {
+    const room = await liveblocks.getRoom(roomId);
+    const userIds = Object.keys(room.usersAccesses);
+
+    const { getUsers } = await import("./user.actions");
+    const users = await getUsers({ userIds });
+
+    return parseStringify(
+      users.map((u: User) => ({
+        ...u,
+        userType: (room.usersAccesses[u.email] as string[] | undefined)?.includes("room:write")
+          ? "editor"
+          : "viewer",
+      }))
+    );
+  } catch (error) {
+    console.error(`Error getting document collaborators: ${error}`);
+    return [];
+  }
+};
+
 export const deleteDocument = async (roomId: string) => {
   try {
+    // Look up document for activity logging before deleting
+    const [doc] = await db
+      .select({
+        workspaceId: document.workspaceId,
+        creatorId: document.creatorId,
+        title: document.title,
+      })
+      .from(document)
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
     await liveblocks.deleteRoom(roomId);
-    revalidatePath("/dashboard");
-    redirect("/dashboard");
+    await db.delete(document).where(eq(document.roomId, roomId));
+
+    if (doc) {
+      await db.insert(activityLog).values({
+        workspaceId: doc.workspaceId,
+        userId: doc.creatorId,
+        action: "deleted",
+        metadata: JSON.stringify({ roomId, title: doc.title }),
+      });
+    }
   } catch (error) {
-    console.error(`Error deleting room: ${error}`);
+    console.error(`Error deleting document: ${error}`);
+    throw error;
   }
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
 };
