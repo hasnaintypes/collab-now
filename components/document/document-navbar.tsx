@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, FileDown, Printer } from "lucide-react";
+import { FileText, FileDown, Printer, PanelLeft, MessageSquare } from "lucide-react";
 import { LogoIcon } from "@/components/logo";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import ActiveCollaborators from "./active-collaborators";
 import ShareDialog from "./share-dialog";
 import UserButton from "@/components/shared/user-button";
@@ -16,6 +17,8 @@ export default function DocumentNavbar({
   currentUserType,
   currentUser,
   exportRef,
+  onToggleSidebar,
+  onToggleDiscussion,
 }: {
   roomId: string;
   roomMetadata: RoomMetadata;
@@ -23,28 +26,39 @@ export default function DocumentNavbar({
   currentUserType: UserType;
   currentUser: { name: string; email: string; avatar: string };
   exportRef: React.MutableRefObject<ExportFunctions | null>;
+  onToggleSidebar: () => void;
+  onToggleDiscussion: () => void;
 }) {
   return (
-    <nav className="fixed top-0 w-full z-50 flex items-center justify-between px-8 h-16 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
-      <div className="flex items-center gap-8">
+    <nav className="fixed top-0 w-full z-50 flex items-center justify-between px-4 md:px-8 h-16 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
+      <div className="flex items-center gap-4">
+        {/* Mobile sidebar toggle */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="lg:hidden"
+          onClick={onToggleSidebar}
+        >
+          <PanelLeft className="size-5" />
+        </Button>
         <Link
           href="/dashboard"
           className="flex items-center gap-1.5 font-extrabold tracking-tighter text-xl"
         >
           <LogoIcon size={24} />
-          CollabNow
+          <span className="hidden sm:inline">CollabNow</span>
         </Link>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="mr-2">
+      <div className="flex items-center gap-2 md:gap-4">
+        <div className="mr-1 md:mr-2 hidden sm:block">
           <ActiveCollaborators />
         </div>
 
         {/* Export */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="px-4 py-1.5 text-sm font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors">
+            <button className="px-3 md:px-4 py-1.5 text-sm font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors">
               Export
             </button>
           </PopoverTrigger>
@@ -79,6 +93,17 @@ export default function DocumentNavbar({
           creatorId={roomMetadata.creatorId}
           currentUserType={currentUserType}
         />
+
+        {/* Mobile discussion toggle */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="xl:hidden"
+          onClick={onToggleDiscussion}
+        >
+          <MessageSquare className="size-5" />
+        </Button>
+
         <UserButton
           name={currentUser.name}
           email={currentUser.email}

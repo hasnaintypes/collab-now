@@ -7,15 +7,7 @@ import { updateDocument } from "@/lib/actions/room.actions";
 import { cn } from "@/lib/utils";
 import type { HeadingEntry } from "@/components/editor/plugins/heading-outline-plugin";
 
-export default function DocumentSidebar({
-  roomId,
-  title,
-  currentUserType,
-  currentUserName,
-  headings,
-  activeHeadingKey,
-  onScrollToHeading,
-}: {
+type SidebarProps = {
   roomId: string;
   title: string;
   currentUserType: UserType;
@@ -23,7 +15,29 @@ export default function DocumentSidebar({
   headings: HeadingEntry[];
   activeHeadingKey: string | null;
   onScrollToHeading: (key: string) => void;
-}) {
+};
+
+export function DocumentSidebarContent(props: SidebarProps) {
+  return <SidebarInner {...props} />;
+}
+
+export default function DocumentSidebar(props: SidebarProps) {
+  return (
+    <aside className="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex-col py-6 bg-muted/50 border-r border-border/50 hidden lg:flex overflow-y-auto no-scrollbar">
+      <SidebarInner {...props} />
+    </aside>
+  );
+}
+
+function SidebarInner({
+  roomId,
+  title,
+  currentUserType,
+  currentUserName,
+  headings,
+  activeHeadingKey,
+  onScrollToHeading,
+}: SidebarProps) {
   const [documentTitle, setDocumentTitle] = useState(title);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -68,7 +82,7 @@ export default function DocumentSidebar({
   }, [editing]);
 
   return (
-    <aside className="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex-col py-6 bg-muted/50 border-r border-border/50 hidden lg:flex overflow-y-auto no-scrollbar">
+    <>
       {/* Document Title */}
       <div className="px-5 mb-6">
         <div ref={containerRef} className="flex items-center gap-3">
@@ -177,6 +191,6 @@ export default function DocumentSidebar({
           </button>
         </div>
       )}
-    </aside>
+    </>
   );
 }
