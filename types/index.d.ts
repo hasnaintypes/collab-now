@@ -83,10 +83,12 @@ declare type CollaboratorProps = {
 
 declare type WorkspaceRole = "owner" | "admin" | "member";
 declare type InviteStatus = "pending" | "accepted" | "expired";
-declare type ActivityAction = "created" | "shared" | "deleted" | "renamed" | "invited" | "joined";
+declare type ActivityAction = "created" | "shared" | "deleted" | "renamed" | "invited" | "joined" | "starred" | "unstarred" | "archived" | "unarchived";
 
 declare type RoomDocument = {
   id: string;
   metadata: { title: string; creatorId?: string };
   createdAt: string;
+  isStarred?: boolean;
+  isArchived?: boolean;
 };
