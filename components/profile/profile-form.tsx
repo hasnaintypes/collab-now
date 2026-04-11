@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { updateUser } from "@/lib/auth-client";
+import { updateUser } from "@/lib/auth/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Camera, Check, X, Upload, Pencil } from "lucide-react";

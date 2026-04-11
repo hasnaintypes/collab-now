@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { useState } from 'react'
 import { LogoIcon } from '@/components/logo'
 import { Input } from '@/components/ui/input'
-import { signUp } from '@/lib/auth-client'
+import { signUp } from '@/lib/auth/client'
 
 type SignUpForm = {
     name: string
@@ -31,7 +31,7 @@ export default function SignUpPage() {
             { name: data.name, email: data.email, password: data.password },
             {
                 onSuccess: () => {
-                    router.push('/dashboard')
+                    router.push(`/verify-email?email=${encodeURIComponent(data.email)}`)
                 },
             }
         )

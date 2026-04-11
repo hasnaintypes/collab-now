@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { useState } from 'react'
 import { LogoIcon } from '@/components/logo'
 import { Input } from '@/components/ui/input'
-import { signIn } from '@/lib/auth-client'
+import { signIn, sendVerificationEmail } from '@/lib/auth/client'
 
 type SignInForm = {
     email: string
@@ -16,6 +16,10 @@ type SignInForm = {
 export default function SignInPage() {
     const router = useRouter()
     const [serverError, setServerError] = useState('')
+    const [needsVerification, setNeedsVerification] = useState(false)
+    const [verificationEmail, setVerificationEmail] = useState('')
+    const [resending, setResending] = useState(false)
+    const [resent, setResent] = useState(false)
 
     const {
         register,
@@ -25,6 +29,8 @@ export default function SignInPage() {
 
     async function onSubmit(data: SignInForm) {
         setServerError('')
+        setNeedsVerification(false)
+        setResent(false)
 
         const { error } = await signIn.email(
             { email: data.email, password: data.password },
@@ -36,8 +42,27 @@ export default function SignInPage() {
         )
 
         if (error) {
-            setServerError(error.message ?? 'Invalid email or password.')
+            const msg = error.message ?? ''
+            if (msg.toLowerCase().includes('email is not verified') || error.code === 'EMAIL_NOT_VERIFIED') {
+                setNeedsVerification(true)
+                setVerificationEmail(data.email)
+            } else {
+                setServerError(msg || 'Invalid email or password.')
+            }
         }
+    }
+
+    async function handleResend() {
+        if (!verificationEmail || resending) return
+        setResending(true)
+        setResent(false)
+        try {
+            await sendVerificationEmail({ email: verificationEmail })
+            setResent(true)
+        } catch {
+            // silently fail
+        }
+        setResending(false)
     }
 
     return (
@@ -92,6 +117,22 @@ export default function SignInPage() {
 
                 {serverError && (
                     <p className="text-sm text-destructive">{serverError}</p>
+                )}
+
+                {needsVerification && (
+                    <div className="space-y-3 rounded-md border border-border bg-muted/50 p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Your email is not verified. Check your inbox or resend the verification email.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleResend}
+                            disabled={resending}
+                            className="text-sm font-semibold text-foreground hover:underline disabled:opacity-50"
+                        >
+                            {resending ? 'Sending...' : resent ? 'Email sent!' : 'Resend verification email'}
+                        </button>
+                    </div>
                 )}
 
                 <button

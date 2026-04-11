@@ -6,7 +6,7 @@ import {
   ClientSideSuspense,
 } from "@liveblocks/react/suspense";
 import { getUsers, getDocumentUsers } from "@/lib/actions/user.actions";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { Loader2 } from "lucide-react";
 
 function Loader() {
