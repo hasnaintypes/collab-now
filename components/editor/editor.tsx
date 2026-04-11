@@ -23,6 +23,7 @@ import {
 } from "@liveblocks/react-lexical";
 import FloatingToolbar from "./plugins/floating-toolbar";
 import WordCountPlugin from "./plugins/word-count-plugin";
+import { ExportBridge, type ExportFunctions } from "./plugins/export-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/components/shared/comments";
 import Loader from "@/components/shared/loader";
@@ -42,12 +43,16 @@ export function Editor({
   onHeadingsChange,
   onWordCountChange,
   scrollToHeadingRef,
+  exportRef,
+  documentTitle,
 }: {
   roomId: string;
   currentUserType: UserType;
   onHeadingsChange: (headings: HeadingEntry[]) => void;
   onWordCountChange?: (wordCount: number) => void;
   scrollToHeadingRef: React.MutableRefObject<((key: string) => void) | null>;
+  exportRef?: React.MutableRefObject<ExportFunctions | null>;
+  documentTitle?: string;
 }) {
   const status = useIsEditorReady();
   const { threads } = useThreads();
@@ -70,6 +75,7 @@ export function Editor({
         scrollRef={scrollToHeadingRef}
       />
       {onWordCountChange && <WordCountPlugin onChange={onWordCountChange} />}
+      {exportRef && <ExportBridge title={documentTitle || "document"} exportRef={exportRef} />}
 
       <div className="flex flex-1 w-full">
         {/* Editor Content Canvas */}
