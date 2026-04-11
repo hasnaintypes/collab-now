@@ -19,6 +19,7 @@ import MobileSidebar from "@/components/dashboard/mobile-sidebar";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
 import Sidebar from "@/components/dashboard/sidebar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardPage({
   searchParams,
@@ -87,6 +88,7 @@ export default async function DashboardPage({
       <DashboardHeader
         mobileSidebar={<MobileSidebar {...sidebarProps} />}
       >
+        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

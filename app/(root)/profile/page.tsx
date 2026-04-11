@@ -14,6 +14,7 @@ import DashboardHeader from "@/components/dashboard/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
 import ProfileForm from "@/components/profile/profile-form";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function ProfilePage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -26,6 +27,7 @@ export default async function ProfilePage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
+        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

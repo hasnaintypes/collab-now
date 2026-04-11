@@ -8,6 +8,7 @@ import DashboardHeader from "@/components/dashboard/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
 import SettingsContent from "@/components/settings/settings-content";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function SettingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
+        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

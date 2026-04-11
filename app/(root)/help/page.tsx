@@ -20,6 +20,7 @@ import { auth } from "@/lib/auth";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/components/shared/notifications";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const gettingStarted = [
   {
@@ -132,6 +133,7 @@ export default async function HelpPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
+        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}
