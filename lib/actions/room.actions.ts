@@ -5,9 +5,9 @@ import { liveblocks } from "../liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "../utils";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { document, activityLog } from "@/db/schema/app";
+import { document, documentStar, activityLog } from "@/db/schema/app";
 import { sendMail } from "@/lib/email/send";
 import { documentShareEmailHtml } from "@/lib/email/templates/document-share";
 
@@ -242,4 +242,112 @@ export const deleteDocument = async (roomId: string) => {
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+};
+
+// ── Starring ──────────────────────────────────────────────────
+
+export const toggleStarDocument = async (roomId: string, userId: string) => {
+  try {
+    const [doc] = await db
+      .select({ id: document.id, workspaceId: document.workspaceId })
+      .from(document)
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
+    if (!doc) throw new Error("Document not found");
+
+    const [existing] = await db
+      .select({ id: documentStar.id })
+      .from(documentStar)
+      .where(
+        and(
+          eq(documentStar.documentId, doc.id),
+          eq(documentStar.userId, userId)
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      await db.delete(documentStar).where(eq(documentStar.id, existing.id));
+    } else {
+      await db.insert(documentStar).values({
+        documentId: doc.id,
+        userId,
+      });
+    }
+
+    revalidatePath("/dashboard");
+    return { starred: !existing };
+  } catch (error) {
+    console.error(`Error toggling star: ${error}`);
+    throw error;
+  }
+};
+
+export const getStarredDocumentRoomIds = async (userId: string) => {
+  try {
+    const rows = await db
+      .select({ roomId: document.roomId })
+      .from(documentStar)
+      .innerJoin(document, eq(documentStar.documentId, document.id))
+      .where(eq(documentStar.userId, userId));
+
+    return rows.map((r) => r.roomId);
+  } catch (error) {
+    console.error(`Error getting starred docs: ${error}`);
+    return [];
+  }
+};
+
+// ── Archiving ─────────────────────────────────────────────────
+
+export const toggleArchiveDocument = async (roomId: string, userId: string) => {
+  try {
+    const [doc] = await db
+      .select({
+        id: document.id,
+        isArchived: document.isArchived,
+        workspaceId: document.workspaceId,
+      })
+      .from(document)
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
+    if (!doc) throw new Error("Document not found");
+
+    const newValue = !doc.isArchived;
+    await db
+      .update(document)
+      .set({ isArchived: newValue, updatedAt: new Date() })
+      .where(eq(document.id, doc.id));
+
+    await db.insert(activityLog).values({
+      workspaceId: doc.workspaceId,
+      userId,
+      action: newValue ? "archived" : "unarchived",
+      metadata: JSON.stringify({ roomId }),
+    });
+
+    revalidatePath("/dashboard");
+    return { archived: newValue };
+  } catch (error) {
+    console.error(`Error toggling archive: ${error}`);
+    throw error;
+  }
+};
+
+export const getArchivedDocumentRoomIds = async (userId: string) => {
+  try {
+    const rows = await db
+      .select({ roomId: document.roomId })
+      .from(document)
+      .where(
+        and(eq(document.creatorId, userId), eq(document.isArchived, true))
+      );
+
+    return rows.map((r) => r.roomId);
+  } catch (error) {
+    console.error(`Error getting archived docs: ${error}`);
+    return [];
+  }
 };
