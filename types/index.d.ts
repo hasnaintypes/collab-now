@@ -87,6 +87,6 @@ declare type ActivityAction = "created" | "shared" | "deleted" | "renamed" | "in
 
 declare type RoomDocument = {
   id: string;
-  metadata: { title: string };
+  metadata: { title: string; creatorId?: string };
   createdAt: string;
 };

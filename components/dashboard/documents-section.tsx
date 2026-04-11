@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { FileText, Search, Share2 } from "lucide-react";
+import { FileText, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { dateConverter } from "@/lib/utils";
 import AddDocumentBtn from "./add-document-btn";
 import DeleteDocumentDialog from "./delete-document-dialog";
+import DashboardShareDialog from "./dashboard-share-dialog";
 
 export default function DocumentsSection({
   documents,
@@ -14,12 +15,14 @@ export default function DocumentsSection({
   email,
   workspaceId,
   activeFilter,
+  currentUser,
 }: {
   documents: RoomDocument[];
   userId: string;
   email: string;
   workspaceId: string;
   activeFilter: string;
+  currentUser: { name: string; email: string; avatar: string };
 }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -125,12 +128,11 @@ export default function DocumentsSection({
 
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Link
-                    href={`/documents/${id}`}
-                    className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <Share2 className="size-[18px]" />
-                  </Link>
+                  <DashboardShareDialog
+                    roomId={id}
+                    creatorId={metadata.creatorId || userId}
+                    currentUser={currentUser}
+                  />
                   <DeleteDocumentDialog roomId={id} />
                 </div>
               </div>

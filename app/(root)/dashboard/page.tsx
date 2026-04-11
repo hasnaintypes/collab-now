@@ -4,7 +4,10 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getDocuments } from "@/lib/actions/room.actions";
-import { getOrCreateWorkspace } from "@/lib/actions/workspace.actions";
+import {
+  getOrCreateWorkspace,
+  getWorkspaceMembers,
+} from "@/lib/actions/workspace.actions";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
 import AddDocumentBtn from "@/components/dashboard/add-document-btn";
 import DocumentsSection from "@/components/dashboard/documents-section";
@@ -37,6 +40,7 @@ export default async function DashboardPage({
   }
 
   const workspaceData = await getOrCreateWorkspace(user.id, user.name);
+  const members = await getWorkspaceMembers(workspaceData.id);
 
   const sidebarProps = {
     workspaceName: workspaceData.name,
@@ -96,6 +100,11 @@ export default async function DashboardPage({
               email={user.email}
               workspaceId={workspaceData.id}
               activeFilter={filter ?? "all"}
+              currentUser={{
+                name: user.name,
+                email: user.email,
+                avatar: user.image || "",
+              }}
             />
 
             {/* Bottom Bento Widgets — hidden on recent filter */}
@@ -141,14 +150,13 @@ export default async function DashboardPage({
                   </h3>
                   <div className="mt-10">
                     <p className="text-2xl font-bold leading-tight tracking-tight">
-                      {docCount} document{docCount !== 1 ? "s" : ""} in your
-                      workspace.
+                      {members.length} Team {members.length === 1 ? "member" : "members"} active now.
                     </p>
                     <Link
                       href="/profile"
                       className="group/link mt-8 flex items-center gap-2 text-xs font-bold uppercase tracking-widest"
                     >
-                      View Profile
+                      View Activity
                       <ArrowRight className="size-4 transition-transform group-hover/link:translate-x-1" />
                     </Link>
                   </div>
