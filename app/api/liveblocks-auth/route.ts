@@ -11,6 +11,9 @@ export async function POST(request: Request) {
 
   const { id, name, email, image } = session.user;
 
+  // Liveblocks userInfo must be under 2048 bytes — skip large base64 avatars
+  const avatar = image && !image.startsWith("data:") ? image : "";
+
   const { status, body } = await liveblocks.identifyUser(
     { userId: email, groupIds: [] },
     {
@@ -18,7 +21,7 @@ export async function POST(request: Request) {
         id,
         name,
         email,
-        avatar: image || "",
+        avatar,
         color: getUserColor(id),
       },
     }
