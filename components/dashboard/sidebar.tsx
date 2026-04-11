@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Folder, Clock, Star, Users2, Archive, Settings, HelpCircle, Users } from "lucide-react";
+import { Folder, Clock, Star, Users2, Archive, Activity, Settings, HelpCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import InviteMemberDialog from "./invite-member-dialog";
 
@@ -80,6 +80,19 @@ export function SidebarContent({
             invitedById={userId}
           />
         )}
+        <Link
+          href="/activity"
+          onClick={onNavClick}
+          className={cn(
+            "flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors",
+            pathname === "/activity"
+              ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground shadow-sm rounded-sm"
+              : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50"
+          )}
+        >
+          <Activity className="size-5" strokeWidth={1.5} />
+          <span>Activity</span>
+        </Link>
         <Link
           href="/settings"
           onClick={onNavClick}
