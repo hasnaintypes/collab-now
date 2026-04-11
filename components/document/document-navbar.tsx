@@ -1,15 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Download, FileText, FileDown, Printer } from "lucide-react";
+import { FileText, FileDown, Printer } from "lucide-react";
 import { LogoIcon } from "@/components/logo";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ActiveCollaborators from "./active-collaborators";
 import ShareDialog from "./share-dialog";
 import UserButton from "@/components/shared/user-button";
-import Notifications from "@/components/shared/notifications";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { ExportFunctions } from "@/components/editor/plugins/export-plugin";
 
 export default function DocumentNavbar({
@@ -43,16 +40,13 @@ export default function DocumentNavbar({
         <div className="mr-2">
           <ActiveCollaborators />
         </div>
-        <span className="px-4 py-1.5 text-sm font-medium bg-muted text-foreground">
-          {currentUserType === "editor" ? "Edit" : "View"}
-        </span>
 
         {/* Export */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon-sm" title="Export document">
-              <Download className="size-4" />
-            </Button>
+            <button className="px-4 py-1.5 text-sm font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors">
+              Export
+            </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-48 p-1">
             <button
@@ -85,15 +79,11 @@ export default function DocumentNavbar({
           creatorId={roomMetadata.creatorId}
           currentUserType={currentUserType}
         />
-        <div className="flex gap-1 ml-1">
-          <ThemeToggle />
-          <Notifications />
-          <UserButton
-            name={currentUser.name}
-            email={currentUser.email}
-            avatar={currentUser.avatar}
-          />
-        </div>
+        <UserButton
+          name={currentUser.name}
+          email={currentUser.email}
+          avatar={currentUser.avatar}
+        />
       </div>
     </nav>
   );
