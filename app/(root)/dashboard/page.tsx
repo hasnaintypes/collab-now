@@ -3,7 +3,11 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { getDocuments } from "@/lib/actions/room.actions";
+import {
+  getDocuments,
+  getStarredDocumentRoomIds,
+  getArchivedDocumentRoomIds,
+} from "@/lib/actions/room.actions";
 import {
   getOrCreateWorkspace,
   getWorkspaceMembers,
@@ -31,12 +35,35 @@ export default async function DashboardPage({
   const allDocs: RoomDocument[] = roomDocuments?.data ?? [];
   const docCount = allDocs.length;
 
+  // Fetch star/archive metadata from DB
+  const [starredRoomIds, archivedRoomIds] = await Promise.all([
+    getStarredDocumentRoomIds(user.id),
+    getArchivedDocumentRoomIds(user.id),
+  ]);
+
+  const starredSet = new Set(starredRoomIds);
+  const archivedSet = new Set(archivedRoomIds);
+
+  // Enrich docs with star/archive flags
+  const enrichedDocs: RoomDocument[] = allDocs.map((doc) => ({
+    ...doc,
+    isStarred: starredSet.has(doc.id),
+    isArchived: archivedSet.has(doc.id),
+  }));
+
   // Server-side filter
-  let filteredDocs = allDocs;
+  let filteredDocs = enrichedDocs;
   if (filter === "recent") {
-    filteredDocs = [...allDocs]
+    filteredDocs = [...enrichedDocs]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10);
+  } else if (filter === "starred") {
+    filteredDocs = enrichedDocs.filter((doc) => doc.isStarred);
+  } else if (filter === "archived") {
+    filteredDocs = enrichedDocs.filter((doc) => doc.isArchived);
+  } else {
+    // Default "all" view: hide archived documents
+    filteredDocs = enrichedDocs.filter((doc) => !doc.isArchived);
   }
 
   const workspaceData = await getOrCreateWorkspace(user.id, user.name);
@@ -75,7 +102,13 @@ export default async function DashboardPage({
             <header className="mb-20">
               <div className="flex items-center justify-between mb-4">
                 <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-6xl">
-                  {filter === "recent" ? "Recent" : "Document Studio"}
+                  {filter === "recent"
+                    ? "Recent"
+                    : filter === "starred"
+                      ? "Starred"
+                      : filter === "archived"
+                        ? "Archive"
+                        : "Document Studio"}
                 </h1>
                 <AddDocumentBtn userId={user.id} email={user.email} workspaceId={workspaceData.id} />
               </div>
@@ -83,7 +116,11 @@ export default async function DashboardPage({
                 <p className="max-w-md text-lg leading-relaxed text-muted-foreground">
                   {filter === "recent"
                     ? "Your 10 most recently created documents."
-                    : "Organize your collaborative thoughts in an editorial environment designed for focus."}
+                    : filter === "starred"
+                      ? "Documents you've marked as important."
+                      : filter === "archived"
+                        ? "Documents you've moved to the archive."
+                        : "Organize your collaborative thoughts in an editorial environment designed for focus."}
                 </p>
                 {docCount > 0 && (
                   <span className="hidden text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground md:inline">
@@ -108,7 +145,7 @@ export default async function DashboardPage({
             />
 
             {/* Bottom Bento Widgets — hidden on recent filter */}
-            {filter !== "recent" && (
+            {!filter && (
               <section className="mt-20 grid grid-cols-1 gap-6 md:grid-cols-12">
                 {/* Storage Widget */}
                 <div className="group relative overflow-hidden rounded-sm bg-muted/40 p-10 md:col-span-8">
