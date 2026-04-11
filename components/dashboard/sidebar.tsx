@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Folder, Clock, Settings, HelpCircle, Users } from "lucide-react";
+import { Folder, Clock, Star, Archive, Settings, HelpCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import InviteMemberDialog from "./invite-member-dialog";
 
 const navItems = [
   { href: "/dashboard", label: "All Files", icon: Folder, filter: null },
   { href: "/dashboard?filter=recent", label: "Recent", icon: Clock, filter: "recent" },
+  { href: "/dashboard?filter=starred", label: "Starred", icon: Star, filter: "starred" },
+  { href: "/dashboard?filter=archived", label: "Archive", icon: Archive, filter: "archived" },
 ];
 
 export function SidebarContent({
