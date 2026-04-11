@@ -28,7 +28,7 @@ import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/components/shared/comments";
 import Loader from "@/components/shared/loader";
 import { SlidersHorizontal } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 function Placeholder() {
   return (
@@ -129,6 +129,7 @@ export function Editor({
           {/* Mobile */}
           <Sheet open={discussionOpen} onOpenChange={onDiscussionOpenChange}>
             <SheetContent side="right" className="w-80 p-0 overflow-y-auto no-scrollbar">
+              <SheetTitle className="sr-only">Discussion</SheetTitle>
               <div className="flex items-center justify-between px-6 pt-10 pb-6">
                 <h3 className="uppercase tracking-widest text-[10px] font-bold text-muted-foreground">
                   Discussion

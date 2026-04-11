@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, FileDown, Printer, PanelLeft, MessageSquare } from "lucide-react";
+import { FileText, FileDown, Printer } from "lucide-react";
 import { LogoIcon } from "@/components/logo";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import ActiveCollaborators from "./active-collaborators";
 import ShareDialog from "./share-dialog";
 import UserButton from "@/components/shared/user-button";
@@ -17,8 +16,6 @@ export default function DocumentNavbar({
   currentUserType,
   currentUser,
   exportRef,
-  onToggleSidebar,
-  onToggleDiscussion,
 }: {
   roomId: string;
   roomMetadata: RoomMetadata;
@@ -26,21 +23,10 @@ export default function DocumentNavbar({
   currentUserType: UserType;
   currentUser: { name: string; email: string; avatar: string };
   exportRef: React.MutableRefObject<ExportFunctions | null>;
-  onToggleSidebar: () => void;
-  onToggleDiscussion: () => void;
 }) {
   return (
     <nav className="fixed top-0 w-full z-50 flex items-center justify-between px-4 md:px-8 h-16 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
       <div className="flex items-center gap-4">
-        {/* Mobile sidebar toggle */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="lg:hidden"
-          onClick={onToggleSidebar}
-        >
-          <PanelLeft className="size-5" />
-        </Button>
         <Link
           href="/dashboard"
           className="flex items-center gap-1.5 font-extrabold tracking-tighter text-xl"
@@ -93,16 +79,6 @@ export default function DocumentNavbar({
           creatorId={roomMetadata.creatorId}
           currentUserType={currentUserType}
         />
-
-        {/* Mobile discussion toggle */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="xl:hidden"
-          onClick={onToggleDiscussion}
-        >
-          <MessageSquare className="size-5" />
-        </Button>
 
         <UserButton
           name={currentUser.name}
