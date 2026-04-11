@@ -4,15 +4,12 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { updateUser } from "@/lib/auth/client";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Camera, Check, X, Upload, Pencil } from "lucide-react";
+import { Camera, Check, X, Pencil } from "lucide-react";
 
 interface ProfileFormProps {
   name: string;
   email: string;
   image: string;
-  createdAt: string;
-  emailVerified: boolean;
 }
 
 function getInitials(name: string) {
@@ -28,8 +25,6 @@ export default function ProfileForm({
   name,
   email,
   image,
-  createdAt,
-  emailVerified,
 }: ProfileFormProps) {
   const [editingName, setEditingName] = useState(false);
   const [currentName, setCurrentName] = useState(name);
@@ -87,11 +82,6 @@ export default function ProfileForm({
     setEditingName(true);
     setTimeout(() => nameInputRef.current?.focus(), 0);
   };
-
-  const formattedDate = new Date(createdAt).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
 
   return (
     <>
@@ -164,51 +154,6 @@ export default function ProfileForm({
         <p className="text-lg uppercase tracking-widest text-muted-foreground">
           {email}
         </p>
-      </div>
-
-      {/* Personal Information — inline editable name field */}
-      <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
-        <div className="space-y-1.5 border-b border-border/50 pb-4">
-          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Full Name
-          </label>
-          {editingName ? (
-            <Input
-              value={currentName}
-              onChange={(e) => setCurrentName(e.target.value)}
-              onKeyDown={handleNameKeyDown}
-              className="h-8 text-base"
-            />
-          ) : (
-            <button
-              onClick={startEditingName}
-              className="group flex w-full items-center justify-between text-left"
-            >
-              <p className="text-base">{currentName}</p>
-              <Pencil className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-            </button>
-          )}
-        </div>
-        <div className="space-y-1.5 border-b border-border/50 pb-4">
-          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Email Address
-          </label>
-          <p className="text-base">{email}</p>
-        </div>
-        <div className="space-y-1.5 border-b border-border/50 pb-4">
-          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Member Since
-          </label>
-          <p className="text-base">{formattedDate}</p>
-        </div>
-        <div className="space-y-1.5 border-b border-border/50 pb-4">
-          <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Account Status
-          </label>
-          <p className="text-base">
-            {emailVerified ? "Verified" : "Unverified"}
-          </p>
-        </div>
       </div>
     </>
   );

@@ -50,8 +50,6 @@ export default async function ProfilePage() {
             name={user.name}
             email={user.email}
             image={user.image || ""}
-            createdAt={user.createdAt.toString()}
-            emailVerified={!!user.emailVerified}
           />
         </section>
 
@@ -95,7 +93,40 @@ export default async function ProfilePage() {
               </div>
             </div>
 
-            {/* Personal Information — rendered inside ProfileForm */}
+            {/* Personal Information */}
+            <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
+              <div className="space-y-1.5 border-b border-border/50 pb-4">
+                <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Full Name
+                </label>
+                <p className="text-base">{user.name}</p>
+              </div>
+              <div className="space-y-1.5 border-b border-border/50 pb-4">
+                <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Email Address
+                </label>
+                <p className="text-base">{user.email}</p>
+              </div>
+              <div className="space-y-1.5 border-b border-border/50 pb-4">
+                <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Member Since
+                </label>
+                <p className="text-base">
+                  {new Date(user.createdAt).toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              </div>
+              <div className="space-y-1.5 border-b border-border/50 pb-4">
+                <label className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Account Status
+                </label>
+                <p className="text-base">
+                  {user.emailVerified ? "Verified" : "Unverified"}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Right Column: Sidebar */}
