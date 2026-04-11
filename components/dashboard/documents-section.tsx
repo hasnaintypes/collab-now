@@ -95,6 +95,7 @@ export default function DocumentsSection({
   const filterLabels: Record<string, string> = {
     recent: "Recent Documents",
     starred: "Starred Documents",
+    shared: "Shared with Me",
     archived: "Archived Documents",
     all: "All Documents",
   };
@@ -119,18 +120,22 @@ export default function DocumentsSection({
           <h2 className="mb-2 text-xl font-bold tracking-tight">
             {activeFilter === "starred"
               ? "No starred documents"
-              : activeFilter === "archived"
-                ? "No archived documents"
-                : "No documents yet"}
+              : activeFilter === "shared"
+                ? "No shared documents"
+                : activeFilter === "archived"
+                  ? "No archived documents"
+                  : "No documents yet"}
           </h2>
           <p className="mb-8 max-w-sm text-sm text-muted-foreground">
             {activeFilter === "starred"
               ? "Star documents to quickly find them later."
-              : activeFilter === "archived"
-                ? "Archived documents will appear here."
-                : "Create your first document to start collaborating with your team."}
+              : activeFilter === "shared"
+                ? "Documents shared with you by others will appear here."
+                : activeFilter === "archived"
+                  ? "Archived documents will appear here."
+                  : "Create your first document to start collaborating with your team."}
           </p>
-          {activeFilter !== "starred" && activeFilter !== "archived" && (
+          {!["starred", "shared", "archived"].includes(activeFilter) && (
             <AddDocumentBtn userId={userId} email={email} workspaceId={workspaceId} />
           )}
         </div>

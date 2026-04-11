@@ -59,6 +59,10 @@ export default async function DashboardPage({
       .slice(0, 10);
   } else if (filter === "starred") {
     filteredDocs = enrichedDocs.filter((doc) => doc.isStarred);
+  } else if (filter === "shared") {
+    filteredDocs = enrichedDocs.filter(
+      (doc) => doc.metadata.creatorId !== user.id && !doc.isArchived
+    );
   } else if (filter === "archived") {
     filteredDocs = enrichedDocs.filter((doc) => doc.isArchived);
   } else {
@@ -106,9 +110,11 @@ export default async function DashboardPage({
                     ? "Recent"
                     : filter === "starred"
                       ? "Starred"
-                      : filter === "archived"
-                        ? "Archive"
-                        : "Document Studio"}
+                      : filter === "shared"
+                        ? "Shared with Me"
+                        : filter === "archived"
+                          ? "Archive"
+                          : "Document Studio"}
                 </h1>
                 <AddDocumentBtn userId={user.id} email={user.email} workspaceId={workspaceData.id} />
               </div>
@@ -118,9 +124,11 @@ export default async function DashboardPage({
                     ? "Your 10 most recently created documents."
                     : filter === "starred"
                       ? "Documents you've marked as important."
-                      : filter === "archived"
-                        ? "Documents you've moved to the archive."
-                        : "Organize your collaborative thoughts in an editorial environment designed for focus."}
+                      : filter === "shared"
+                        ? "Documents others have shared with you."
+                        : filter === "archived"
+                          ? "Documents you've moved to the archive."
+                          : "Organize your collaborative thoughts in an editorial environment designed for focus."}
                 </p>
                 {docCount > 0 && (
                   <span className="hidden text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground md:inline">
