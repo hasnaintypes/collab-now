@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { updateUser } from "@/lib/auth/client";
+import { useUploadThing } from "@/lib/uploadthing";
 import { Input } from "@/components/ui/input";
 import { Camera, Check, X, Pencil } from "lucide-react";
 
@@ -33,25 +34,30 @@ export default function ProfileForm({
   const fileRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { startUpload } = useUploadThing("avatarUploader");
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result as string;
-      setPreview(base64);
-      setSaving(true);
-      try {
-        await updateUser({ image: base64 });
-        router.refresh();
-      } catch (error) {
-        console.error("Failed to update avatar:", error);
-        setPreview(image);
-      }
+    e.target.value = "";
+
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setSaving(true);
+    try {
+      const res = await startUpload([file]);
+      const url = res?.[0]?.ufsUrl;
+      if (!url) throw new Error("Upload failed");
+      await updateUser({ image: url });
+      setPreview(url);
+      router.refresh();
+    } catch (error) {
+      console.error("Failed to update avatar:", error);
+      setPreview(image);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
       setSaving(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleNameSave = async () => {
