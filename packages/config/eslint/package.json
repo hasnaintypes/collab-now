@@ -1,0 +1,22 @@
+{
+  "name": "@collabnow/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "base.mjs",
+    "next.mjs"
+  ],
+  "exports": {
+    "./base": "./base.mjs",
+    "./next": "./next.mjs"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.0.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "*"
+  }
+}

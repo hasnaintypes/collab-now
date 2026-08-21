@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "CollabNow (stub)",
+  "version": "0.0.1",
+  "description": "Placeholder for the CollabNow browser extension. Not yet functional — see docs/PRD.md \u00a76.11.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab", "storage"]
+}

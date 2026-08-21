@@ -1,0 +1,27 @@
+"use client";
+
+import { createDocument } from "../actions/room.actions";
+import { useRouter } from "next/navigation";
+import type { AddDocumentBtnProps } from "../types";
+
+export default function AddDocumentBtn({ userId, email, workspaceId }: AddDocumentBtnProps) {
+  const router = useRouter();
+
+  const handleAdd = async () => {
+    try {
+      const room = await createDocument({ userId, email, workspaceId });
+      if (room) router.push(`/documents/${room.id}`);
+    } catch (error) {
+      console.error(`Failed to create document: ${error}`);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleAdd}
+      className="rounded-sm bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-transform active:scale-95"
+    >
+      New Document
+    </button>
+  );
+}

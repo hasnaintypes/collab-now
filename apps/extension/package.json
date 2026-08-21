@@ -1,0 +1,27 @@
+{
+  "name": "extension",
+  "version": "0.0.1",
+  "private": true,
+  "description": "CollabNow browser extension stub (see docs/PRD.md \u00a76.11). Not yet functional.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@collabnow/eslint-config": "workspace:*",
+    "@collabnow/typescript-config": "workspace:*",
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vite": "^6.0.0"
+  }
+}

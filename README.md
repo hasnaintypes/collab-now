@@ -2,10 +2,13 @@
 
 A real-time collaborative document editor built for modern teams. Create, edit, and share documents with live presence, inline comments, and granular access control.
 
+This repo is a **Turborepo monorepo** with a feature-based (screaming architecture) app structure.
+
 ## Tech Stack
 
 | Layer | Technology |
 |:---:|:---|
+| **Monorepo** | Turborepo + pnpm workspaces |
 | **Framework** | Next.js 16 + React 19 |
 | **Language** | TypeScript 5 |
 | **Styling** | Tailwind CSS v4 + shadcn/ui |
@@ -13,7 +16,6 @@ A real-time collaborative document editor built for modern teams. Create, edit, 
 | **Database** | PostgreSQL (NeonDB) + Drizzle ORM |
 | **Real-time** | Liveblocks + Lexical Editor |
 | **Email** | Nodemailer (SMTP) |
-| **Package Manager** | pnpm |
 
 ## Features
 
@@ -35,78 +37,94 @@ A real-time collaborative document editor built for modern teams. Create, edit, 
 ### Prerequisites
 
 - Node.js 18+
-- pnpm
+- pnpm 10+
 - PostgreSQL database (NeonDB recommended)
 - Liveblocks account
 - SMTP credentials (for email invites)
 
 ### Environment Variables
 
-Create a `.env.local` file:
+Create `apps/web/.env` (Next.js only loads env files from its own app directory, not the repo root):
 
 ```env
 DATABASE_URL=postgresql://...
 BETTER_AUTH_SECRET=your-secret
 BETTER_AUTH_URL=http://localhost:3000
+
+NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=
 LIVEBLOCKS_SECRET_KEY=sk_...
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=your-email
-SMTP_PASS=your-password
-EMAIL_FROM=noreply@example.com
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+UPLOADTHING_TOKEN=
+
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
 ```
+
+See `apps/web/.env.example` for the full list.
 
 ### Installation
 
 ```bash
 pnpm install
-pnpm db:generate
 pnpm db:push
 pnpm dev
 ```
 
+`pnpm dev` runs only the `web` app. Use `pnpm dev:all` to also start the `extension` dev server.
+
 ## Project Structure
 
 ```
-app/
-├── (auth)/              Sign-in, sign-up
-├── (root)/              Dashboard, editor, profile, settings, help
-├── api/                 Auth + Liveblocks endpoints
-└── page.tsx             Landing page
+apps/
+├── web/                        Next.js app
+│   └── src/
+│       ├── app/                 Routing only — thin pages/layouts/API routes
+│       ├── features/            Feature modules (screaming architecture)
+│       │   ├── auth/             Sign-in/up/verify-email, Better Auth config
+│       │   ├── documents/        Document CRUD, sharing, star/archive
+│       │   ├── editor/           Lexical editor, collaborative room, plugins
+│       │   ├── comments/         Liveblocks threaded comments
+│       │   ├── notifications/    Liveblocks inbox notifications
+│       │   ├── workspace/        Workspace/team, invites, sidebar nav
+│       │   ├── activity/         Workspace activity feed
+│       │   ├── profile/          Profile page + avatar upload
+│       │   ├── settings/         Settings page
+│       │       └── marketing/        Marketing landing page sections
+│       │       (each feature owns its own components/actions/types.ts)
+│       ├── components/           Generic, cross-feature UI (ui/, layout/, shared/)
+│       ├── lib/                  Cross-cutting infra (liveblocks, uploadthing, utils)
+│       └── types/                Ambient global types shared by 3+ features
+│
+└── extension/                  Browser extension stub (Vite + React + MV3)
+                                  — see docs/PRD.md §6.11, not yet functional
 
-components/
-├── dashboard/           Sidebar, header, document list, invite dialog
-├── document/            Collaborative room, share dialog
-├── editor/              Lexical editor, toolbar, floating toolbar, plugins
-├── home/                Landing page sections
-├── settings/            Settings page content
-├── shared/              Notifications, user button, comments, loader
-└── ui/                  shadcn/ui primitives
+packages/
+├── db/                          @collabnow/db — Drizzle schema + client
+├── email/                       @collabnow/email — Nodemailer + HTML templates
+└── config/
+    ├── eslint/                   @collabnow/eslint-config
+    └── typescript/                @collabnow/typescript-config
 
-lib/
-├── actions/             Server actions (rooms, users, workspaces)
-├── auth.ts              Better Auth config
-├── liveblocks.ts        Liveblocks client
-└── mail.ts              Email transport
-
-db/
-├── schema/              Drizzle schema (auth + app tables)
-└── index.ts             Database client
+docs/                           GAP.md, PRD.md — local-only planning docs (git-ignored)
 ```
 
 ## Scripts
 
+Run from the repo root — Turborepo fans these out to the right workspace(s):
+
 | Command | Description |
 |:---|:---|
-| `pnpm dev` | Start development server |
-| `pnpm build` | Production build |
-| `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
+| `pnpm dev` | Start the web app dev server |
+| `pnpm dev:all` | Start dev servers for all apps |
+| `pnpm build` | Production build (all apps) |
+| `pnpm lint` | Run ESLint across the workspace |
+| `pnpm check-types` | Type-check across the workspace |
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Run migrations |
 | `pnpm db:push` | Push schema to database |
 | `pnpm db:studio` | Open Drizzle Studio |
+
+To target a single workspace directly, use pnpm's `--filter`, e.g. `pnpm --filter web run build`.
 
 ## License
 

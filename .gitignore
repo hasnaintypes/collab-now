@@ -2,7 +2,7 @@
 
 .claude/
 # dependencies
-/node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,8 +15,16 @@
 /coverage
 
 # next.js
-/.next/
-/out/
+**/.next/
+**/out/
+
+# vite / extension build output
+**/dist/
+apps/extension/.vite/
+
+# turborepo
+.turbo/
+**/.turbo/
 
 # production
 /build
@@ -42,3 +50,8 @@ yarn-error.log*
 next-env.d.ts
 temp/
 claude/
+
+# local-only planning docs (GAP analysis, PRDs, roadmaps) — not tracked
+docs/
+.vercel
+.env*

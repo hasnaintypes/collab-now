@@ -1,0 +1,9 @@
+# Never upload local secrets — Vercel deployments use dashboard-configured
+# Environment Variables instead.
+.env
+.env.*
+!.env.example
+
+docs/
+.turbo/
+.claude/

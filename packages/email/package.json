@@ -1,0 +1,21 @@
+{
+  "name": "@collabnow/email",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.5"
+  },
+  "devDependencies": {
+    "@collabnow/typescript-config": "workspace:*",
+    "@types/nodemailer": "^8.0.0",
+    "typescript": "^5"
+  }
+}
