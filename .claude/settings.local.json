@@ -17,7 +17,21 @@
       "Bash(pnpm add:*)",
       "Bash(pnpm dlx:*)",
       "Bash(printf y\\\\ny\\\\n:*)",
-      "Bash(yes y:*)"
+      "Bash(yes y:*)",
+      "Bash(npm:*)",
+      "WebFetch(domain:neon.com)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm db:push:*)",
+      "Bash(node:*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:liveblocks.io)",
+      "Bash(tr ;:*)",
+      "Bash(cat:*)",
+      "Bash(gh repo:*)",
+      "Bash(cp:*)",
+      "WebFetch(domain:docs.uploadthing.com)"
     ]
   }
 }
