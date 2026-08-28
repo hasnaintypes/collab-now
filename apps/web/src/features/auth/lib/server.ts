@@ -7,6 +7,7 @@ import {
   sendMail,
   verificationEmailHtml,
   passwordResetEmailHtml,
+  welcomeEmailHtml,
 } from "@collabnow/email";
 
 export const auth = betterAuth({
@@ -35,6 +36,23 @@ export const auth = betterAuth({
         subject: "Verify your email — Collab Now",
         html: verificationEmailHtml({ name: user.name, verifyUrl: url }),
       });
+    },
+    afterEmailVerification: async (user) => {
+      // Better Auth only calls this hook on the transition to verified (it no-ops on
+      // replayed verification links), so this fires exactly once per user. It's awaited
+      // by the verify-email endpoint, so a send failure must not throw and fail that flow.
+      try {
+        await sendMail({
+          to: user.email,
+          subject: "Welcome to Collab Now",
+          html: welcomeEmailHtml({
+            name: user.name,
+            dashboardUrl: `${process.env.BETTER_AUTH_URL || "http://localhost:3000"}/dashboard`,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to send welcome email:", error);
+      }
     },
   },
   trustedOrigins: ["http://localhost:3000"],
