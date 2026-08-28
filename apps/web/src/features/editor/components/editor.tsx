@@ -39,7 +39,6 @@ function Placeholder() {
 }
 
 export function Editor({
-  roomId,
   currentUserType,
   onHeadingsChange,
   onWordCountChange,

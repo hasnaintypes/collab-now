@@ -220,6 +220,9 @@ export default function InviteMemberDialog({
                     <div className="flex items-center gap-2">
                       <Clock className="size-3.5 text-muted-foreground" />
                       <span className="truncate">{invite.email}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {dateConverter(invite.createdAt)}
+                      </span>
                     </div>
                     <span className="text-xs capitalize text-muted-foreground">
                       {invite.role}

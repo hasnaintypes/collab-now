@@ -5,7 +5,7 @@ import { liveblocks } from "@/lib/liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
 import { redirect } from "next/navigation";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, document, documentStar, activityLog } from "@collabnow/db";
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
 import type { CreateDocumentParams, ShareDocumentParams } from "../types";

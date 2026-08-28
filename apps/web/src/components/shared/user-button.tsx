@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/popover";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { LogOut, User } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -40,9 +41,11 @@ export default function UserButton({
     <Popover>
       <PopoverTrigger className="flex size-9 items-center justify-center rounded-full outline-none transition-opacity hover:opacity-80">
         {avatar ? (
-          <img
+          <Image
             src={avatar}
             alt={name}
+            width={36}
+            height={36}
             className="size-9 rounded-full object-cover"
           />
         ) : (
@@ -57,9 +60,11 @@ export default function UserButton({
       >
         <div className="flex items-center gap-3 pb-3">
           {avatar ? (
-            <img
+            <Image
               src={avatar}
               alt={name}
+              width={36}
+              height={36}
               className="size-9 rounded-full object-cover"
             />
           ) : (

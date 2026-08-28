@@ -40,12 +40,21 @@ export default function DashboardShareDialog({
 
   useEffect(() => {
     if (!open) return;
-    setFetching(true);
+    let cancelled = false;
     getDocumentCollaborators(roomId).then((users) => {
+      if (cancelled) return;
       setCollaborators(users);
       setFetching(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [open, roomId]);
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) setFetching(true);
+  };
 
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -77,7 +86,7 @@ export default function DashboardShareDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <button className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground">
           <Share2 className="size-[18px]" />

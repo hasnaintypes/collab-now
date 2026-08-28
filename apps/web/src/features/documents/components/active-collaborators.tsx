@@ -1,6 +1,7 @@
 "use client";
 
 import { useOthers } from "@liveblocks/react/suspense";
+import Image from "next/image";
 
 export default function ActiveCollaborators() {
   const others = useOthers();
@@ -11,9 +12,11 @@ export default function ActiveCollaborators() {
       {collaborators.map(({ id, avatar, name, color }) => (
         <li key={id} title={name}>
           {avatar ? (
-            <img
+            <Image
               src={avatar}
               alt={name}
+              width={32}
+              height={32}
               className="size-8 rounded-full ring-2 ring-background object-cover"
               style={{ borderColor: color }}
             />

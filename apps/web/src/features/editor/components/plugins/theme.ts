@@ -1,4 +1,4 @@
-export default {
+const editorTheme = {
   code: "editor-code",
   heading: {
     h1: "editor-heading-h1",
@@ -31,3 +31,5 @@ export default {
     underlineStrikethrough: "editor-text-underlineStrikethrough",
   },
 };
+
+export default editorTheme;

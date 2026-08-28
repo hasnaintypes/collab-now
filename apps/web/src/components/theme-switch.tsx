@@ -2,7 +2,7 @@
 
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 const themes = [
     { value: 'light', icon: Sun, label: 'Light' },
@@ -10,13 +10,19 @@ const themes = [
     { value: 'dark', icon: Moon, label: 'Dark' },
 ] as const
 
+function subscribeNoop() {
+    return () => {}
+}
+
+// next-themes only knows the real theme after hydration; useSyncExternalStore lets us
+// read a client-only snapshot without the extra setState-in-effect render.
+function useMounted() {
+    return useSyncExternalStore(subscribeNoop, () => true, () => false)
+}
+
 export function ThemeSwitch() {
     const { theme, setTheme } = useTheme()
-    const [mounted, setMounted] = useState(false)
-
-    useEffect(() => {
-        setMounted(true)
-    }, [])
+    const mounted = useMounted()
 
     if (!mounted) {
         return (

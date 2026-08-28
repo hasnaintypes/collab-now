@@ -1,8 +1,8 @@
 declare global {
   interface Liveblocks {
-    Presence: {};
+    Presence: Record<string, never>;
 
-    Storage: {};
+    Storage: Record<string, never>;
 
     UserMeta: {
       id: string;
@@ -15,11 +15,11 @@ declare global {
       };
     };
 
-    RoomEvent: {};
+    RoomEvent: Record<string, never>;
 
-    ThreadMetadata: {};
+    ThreadMetadata: Record<string, never>;
 
-    RoomInfo: {};
+    RoomInfo: Record<string, never>;
   }
 }
 

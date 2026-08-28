@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   User,
   Building2,
@@ -119,9 +120,11 @@ export default function SettingsContent({
             <SettingRow label="Avatar">
               <div className="flex items-center gap-3">
                 {user.image ? (
-                  <img
+                  <Image
                     src={user.image}
                     alt={user.name}
+                    width={32}
+                    height={32}
                     className="size-8 rounded-full object-cover"
                   />
                 ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import UserTypeSelect from "./user-type-select";
 import {
@@ -49,9 +50,11 @@ export default function CollaboratorRow({
     <li className="flex items-center justify-between gap-2 py-3">
       <div className="flex items-center gap-3">
         {collaborator.avatar ? (
-          <img
+          <Image
             src={collaborator.avatar}
             alt={collaborator.name}
+            width={32}
+            height={32}
             className="size-8 rounded-full object-cover"
           />
         ) : (

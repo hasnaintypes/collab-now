@@ -94,6 +94,8 @@ export default function ProfileForm({
       {/* Avatar with edit overlay */}
       <div className="relative group cursor-pointer" onClick={() => fileRef.current?.click()}>
         {preview ? (
+          // next/image can't render blob: object URLs used for the local upload preview
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={preview}
             alt={currentName}
