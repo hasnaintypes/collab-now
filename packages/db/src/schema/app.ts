@@ -3,6 +3,7 @@ import {
   text,
   timestamp,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 import { user } from "./auth";
@@ -79,22 +80,31 @@ export const document = pgTable("document", {
 
 // ── Document Collaborator ────────────────────────────────────
 
-export const documentCollaborator = pgTable("document_collaborator", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => nanoid()),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => document.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  role: text("role").notNull().default("viewer"),
-  addedAt: timestamp("added_at").notNull().defaultNow(),
-  addedBy: text("added_by")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-});
+export const documentCollaborator = pgTable(
+  "document_collaborator",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => document.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("viewer"),
+    addedAt: timestamp("added_at").notNull().defaultNow(),
+    addedBy: text("added_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("document_collaborator_document_user_idx").on(
+      table.documentId,
+      table.userId
+    ),
+  ]
+);
 
 // ── Document Star ────────────────────────────────────────────
 

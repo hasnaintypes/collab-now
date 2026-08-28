@@ -5,10 +5,21 @@ import { liveblocks } from "@/lib/liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
 import { redirect } from "next/navigation";
-import { eq, and } from "drizzle-orm";
-import { db, document, documentStar, activityLog } from "@collabnow/db";
+import { eq, and, or, isNotNull, inArray, desc, count } from "drizzle-orm";
+import {
+  db,
+  document,
+  documentStar,
+  documentCollaborator,
+  activityLog,
+  user,
+} from "@collabnow/db";
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
-import type { CreateDocumentParams, ShareDocumentParams } from "../types";
+import type {
+  CreateDocumentParams,
+  ShareDocumentParams,
+  RoomDocument,
+} from "../types";
 
 const DOC_LIMIT = 50;
 
@@ -18,9 +29,22 @@ export const createDocument = async ({
   workspaceId,
 }: CreateDocumentParams) => {
   try {
-    // Enforce 50-document limit
-    const existing = await liveblocks.getRooms({ userId: email });
-    if (existing.data && existing.data.length >= DOC_LIMIT) {
+    // Enforce 50-document limit (documents the user created or was added to as a collaborator)
+    const [{ count: existingCount }] = await db
+      .select({ count: count() })
+      .from(document)
+      .leftJoin(
+        documentCollaborator,
+        and(
+          eq(documentCollaborator.documentId, document.id),
+          eq(documentCollaborator.userId, userId)
+        )
+      )
+      .where(
+        or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id))
+      );
+
+    if (existingCount >= DOC_LIMIT) {
       throw new Error(
         `Document limit reached. You can have up to ${DOC_LIMIT} documents.`
       );
@@ -90,12 +114,58 @@ export const getDocument = async ({
   }
 };
 
-export const getDocuments = async (email: string) => {
+export const getDocumentsForUser = async (
+  userId: string
+): Promise<RoomDocument[]> => {
   try {
-    const rooms = await liveblocks.getRooms({ userId: email });
-    return parseStringify(rooms);
+    const rows = await db
+      .select({
+        id: document.id,
+        roomId: document.roomId,
+        title: document.title,
+        creatorId: document.creatorId,
+        createdAt: document.createdAt,
+        isArchived: document.isArchived,
+      })
+      .from(document)
+      .leftJoin(
+        documentCollaborator,
+        and(
+          eq(documentCollaborator.documentId, document.id),
+          eq(documentCollaborator.userId, userId)
+        )
+      )
+      .where(
+        or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id))
+      )
+      .orderBy(desc(document.createdAt));
+
+    if (rows.length === 0) return [];
+
+    const starredRows = await db
+      .select({ documentId: documentStar.documentId })
+      .from(documentStar)
+      .where(
+        and(
+          eq(documentStar.userId, userId),
+          inArray(
+            documentStar.documentId,
+            rows.map((r) => r.id)
+          )
+        )
+      );
+    const starredSet = new Set(starredRows.map((r) => r.documentId));
+
+    return rows.map((r) => ({
+      id: r.roomId,
+      metadata: { title: r.title, creatorId: r.creatorId },
+      createdAt: r.createdAt.toISOString(),
+      isStarred: starredSet.has(r.id),
+      isArchived: r.isArchived,
+    }));
   } catch (error) {
-    console.error(`Error getting rooms: ${error}`);
+    console.error(`Error getting documents: ${error}`);
+    return [];
   }
 };
 
@@ -111,6 +181,87 @@ export const updateDocument = async (roomId: string, title: string) => {
   }
 };
 
+// Mirrors a Liveblocks access grant into `documentCollaborator` so the dashboard can
+// list shared documents from Postgres without querying Liveblocks. No-ops for emails
+// that aren't registered users — they have no dashboard to populate yet.
+// `updatedByEmail` is resolved the same way: this app's `User.id` is frequently just
+// the email (see dashboard-share-dialog.tsx), not the real Postgres user id, so it
+// can't be trusted directly for the `addedBy` foreign key.
+async function grantCollaboratorAccess(
+  roomId: string,
+  email: string,
+  role: "editor" | "viewer",
+  updatedByEmail: string
+) {
+  const [doc] = await db
+    .select({ id: document.id })
+    .from(document)
+    .where(eq(document.roomId, roomId))
+    .limit(1);
+  if (!doc) return;
+
+  const [[targetUser], [adder]] = await Promise.all([
+    db.select({ id: user.id }).from(user).where(eq(user.email, email)).limit(1),
+    db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, updatedByEmail))
+      .limit(1),
+  ]);
+  if (!targetUser || !adder) return;
+
+  const [existing] = await db
+    .select({ id: documentCollaborator.id })
+    .from(documentCollaborator)
+    .where(
+      and(
+        eq(documentCollaborator.documentId, doc.id),
+        eq(documentCollaborator.userId, targetUser.id)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(documentCollaborator)
+      .set({ role })
+      .where(eq(documentCollaborator.id, existing.id));
+  } else {
+    await db.insert(documentCollaborator).values({
+      documentId: doc.id,
+      userId: targetUser.id,
+      role,
+      addedBy: adder.id,
+    });
+  }
+}
+
+// Mirrors a Liveblocks access revoke into `documentCollaborator`.
+async function revokeCollaboratorAccess(roomId: string, email: string) {
+  const [doc] = await db
+    .select({ id: document.id })
+    .from(document)
+    .where(eq(document.roomId, roomId))
+    .limit(1);
+  if (!doc) return;
+
+  const [targetUser] = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+  if (!targetUser) return;
+
+  await db
+    .delete(documentCollaborator)
+    .where(
+      and(
+        eq(documentCollaborator.documentId, doc.id),
+        eq(documentCollaborator.userId, targetUser.id)
+      )
+    );
+}
+
 export const updateDocumentAccess = async ({
   roomId,
   email,
@@ -125,6 +276,13 @@ export const updateDocumentAccess = async ({
     const room = await liveblocks.updateRoom(roomId, { usersAccesses });
 
     if (room) {
+      await grantCollaboratorAccess(
+        roomId,
+        email,
+        userType === "viewer" ? "viewer" : "editor",
+        updatedBy.email
+      );
+
       const notificationId = nanoid();
       await liveblocks.triggerInboxNotification({
         userId: email,
@@ -180,6 +338,8 @@ export const removeCollaborator = async ({
     const updatedRoom = await liveblocks.updateRoom(roomId, {
       usersAccesses: { [email]: null },
     });
+
+    await revokeCollaboratorAccess(roomId, email);
 
     revalidatePath(`/documents/${roomId}`);
     return parseStringify(updatedRoom);
@@ -283,21 +443,6 @@ export const toggleStarDocument = async (roomId: string, userId: string) => {
   }
 };
 
-export const getStarredDocumentRoomIds = async (userId: string) => {
-  try {
-    const rows = await db
-      .select({ roomId: document.roomId })
-      .from(documentStar)
-      .innerJoin(document, eq(documentStar.documentId, document.id))
-      .where(eq(documentStar.userId, userId));
-
-    return rows.map((r) => r.roomId);
-  } catch (error) {
-    console.error(`Error getting starred docs: ${error}`);
-    return [];
-  }
-};
-
 // ── Archiving ─────────────────────────────────────────────────
 
 export const toggleArchiveDocument = async (roomId: string, userId: string) => {
@@ -335,18 +480,3 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
   }
 };
 
-export const getArchivedDocumentRoomIds = async (userId: string) => {
-  try {
-    const rows = await db
-      .select({ roomId: document.roomId })
-      .from(document)
-      .where(
-        and(eq(document.creatorId, userId), eq(document.isArchived, true))
-      );
-
-    return rows.map((r) => r.roomId);
-  } catch (error) {
-    console.error(`Error getting archived docs: ${error}`);
-    return [];
-  }
-};

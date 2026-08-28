@@ -3,11 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/features/auth/lib";
-import {
-  getDocuments,
-  getStarredDocumentRoomIds,
-  getArchivedDocumentRoomIds,
-} from "@/features/documents/actions/room.actions";
+import { getDocumentsForUser } from "@/features/documents/actions/room.actions";
 import {
   getOrCreateWorkspace,
   getWorkspaceMembers,
@@ -33,25 +29,8 @@ export default async function DashboardPage({
 
   const { filter } = await searchParams;
 
-  const roomDocuments = await getDocuments(user.email);
-  const allDocs: RoomDocument[] = roomDocuments?.data ?? [];
-  const docCount = allDocs.length;
-
-  // Fetch star/archive metadata from DB
-  const [starredRoomIds, archivedRoomIds] = await Promise.all([
-    getStarredDocumentRoomIds(user.id),
-    getArchivedDocumentRoomIds(user.id),
-  ]);
-
-  const starredSet = new Set(starredRoomIds);
-  const archivedSet = new Set(archivedRoomIds);
-
-  // Enrich docs with star/archive flags
-  const enrichedDocs: RoomDocument[] = allDocs.map((doc) => ({
-    ...doc,
-    isStarred: starredSet.has(doc.id),
-    isArchived: archivedSet.has(doc.id),
-  }));
+  const enrichedDocs: RoomDocument[] = await getDocumentsForUser(user.id);
+  const docCount = enrichedDocs.length;
 
   // Server-side filter
   let filteredDocs = enrichedDocs;
@@ -66,7 +45,10 @@ export default async function DashboardPage({
       (doc) => doc.metadata.creatorId !== user.id && !doc.isArchived
     );
   } else if (filter === "archived") {
-    filteredDocs = enrichedDocs.filter((doc) => doc.isArchived);
+    // Matches the pre-migration behavior: only documents the current user created.
+    filteredDocs = enrichedDocs.filter(
+      (doc) => doc.isArchived && doc.metadata.creatorId === user.id
+    );
   } else {
     // Default "all" view: hide archived documents
     filteredDocs = enrichedDocs.filter((doc) => !doc.isArchived);

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/features/auth/lib";
-import { getDocuments } from "@/features/documents/actions/room.actions";
+import { getDocumentsForUser } from "@/features/documents/actions/room.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
@@ -13,8 +13,7 @@ export default async function ProfilePage() {
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const roomDocuments = await getDocuments(user.email);
-  const recentDocuments = roomDocuments?.data ?? [];
+  const recentDocuments = await getDocumentsForUser(user.id);
   const docCount = recentDocuments.length;
 
   return (
