@@ -23,8 +23,10 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { updateTag, unstable_cache } from "next/cache";
 import { parseStringify } from "@/lib/utils";
 import { sendMail, inviteEmailHtml } from "@collabnow/email";
+import { activityTag, workspaceMembersTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
 import type { WorkspaceRole } from "../types";
 import type { GetActivityOptions, PaginatedActivity } from "../../activity/types";
@@ -101,22 +103,30 @@ export const getOrCreateWorkspace = async (
   }
 };
 
+async function fetchWorkspaceMembers(workspaceId: string) {
+  const members = await db
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      image: user.image,
+      role: workspaceMember.role,
+      joinedAt: workspaceMember.joinedAt,
+    })
+    .from(workspaceMember)
+    .innerJoin(user, eq(workspaceMember.userId, user.id))
+    .where(eq(workspaceMember.workspaceId, workspaceId));
+
+  return parseStringify(members);
+}
+
 export const getWorkspaceMembers = async (workspaceId: string) => {
   try {
-    const members = await db
-      .select({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        image: user.image,
-        role: workspaceMember.role,
-        joinedAt: workspaceMember.joinedAt,
-      })
-      .from(workspaceMember)
-      .innerJoin(user, eq(workspaceMember.userId, user.id))
-      .where(eq(workspaceMember.workspaceId, workspaceId));
-
-    return parseStringify(members);
+    return await unstable_cache(
+      () => fetchWorkspaceMembers(workspaceId),
+      ["workspace-members", workspaceId],
+      { tags: [workspaceMembersTag(workspaceId)], revalidate: 60 }
+    )();
   } catch (error) {
     console.error(`Failed to get workspace members: ${error}`);
     throw error;
@@ -282,6 +292,8 @@ export const inviteMember = async ({
       metadata: JSON.stringify({ email, role }),
     });
 
+    updateTag(activityTag(workspaceId));
+
     return parseStringify(invite);
   } catch (error) {
     console.error(`Failed to invite member: ${error}`);
@@ -357,6 +369,9 @@ export const acceptInvite = async (token: string) => {
       action: "joined",
     });
 
+    updateTag(workspaceMembersTag(invite.workspaceId));
+    updateTag(activityTag(invite.workspaceId));
+
     return { success: true, workspaceId: invite.workspaceId };
   } catch (error) {
     console.error(`Failed to accept invite: ${error}`);
@@ -389,6 +404,55 @@ export const getPendingInvites = async (workspaceId: string) => {
   }
 };
 
+async function fetchActivityPage(
+  workspaceId: string,
+  cursor: string | null,
+  limit: number
+): Promise<PaginatedActivity> {
+  const conditions: (SQL<unknown> | undefined)[] = [
+    eq(activityLog.workspaceId, workspaceId),
+  ];
+
+  const decoded = decodeCursor(cursor);
+  if (decoded) {
+    const cursorCreatedAt = new Date(decoded.createdAt);
+    conditions.push(
+      or(
+        lt(activityLog.createdAt, cursorCreatedAt),
+        and(
+          eq(activityLog.createdAt, cursorCreatedAt),
+          lt(activityLog.id, decoded.id)
+        )
+      )
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: activityLog.id,
+      action: activityLog.action,
+      metadata: activityLog.metadata,
+      createdAt: activityLog.createdAt,
+      userName: user.name,
+      userImage: user.image,
+    })
+    .from(activityLog)
+    .innerJoin(user, eq(activityLog.userId, user.id))
+    .where(and(...conditions))
+    .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor =
+    hasMore && last
+      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+  return { activities: parseStringify(pageRows), nextCursor };
+}
+
 // Activity feed, paginated via `(createdAt, id)` keyset cursor rather than the
 // old fixed "last N" fetch — callers can keep calling with the previous
 // `nextCursor` to page back through full workspace history.
@@ -396,50 +460,15 @@ export const getRecentActivity = async (
   workspaceId: string,
   options: GetActivityOptions = {}
 ): Promise<PaginatedActivity> => {
+  const cursor = options.cursor ?? null;
+  const limit = options.limit ?? ACTIVITY_PAGE_SIZE;
+
   try {
-    const limit = options.limit ?? ACTIVITY_PAGE_SIZE;
-    const conditions: (SQL<unknown> | undefined)[] = [
-      eq(activityLog.workspaceId, workspaceId),
-    ];
-
-    const decoded = decodeCursor(options.cursor);
-    if (decoded) {
-      const cursorCreatedAt = new Date(decoded.createdAt);
-      conditions.push(
-        or(
-          lt(activityLog.createdAt, cursorCreatedAt),
-          and(
-            eq(activityLog.createdAt, cursorCreatedAt),
-            lt(activityLog.id, decoded.id)
-          )
-        )
-      );
-    }
-
-    const rows = await db
-      .select({
-        id: activityLog.id,
-        action: activityLog.action,
-        metadata: activityLog.metadata,
-        createdAt: activityLog.createdAt,
-        userName: user.name,
-        userImage: user.image,
-      })
-      .from(activityLog)
-      .innerJoin(user, eq(activityLog.userId, user.id))
-      .where(and(...conditions))
-      .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
-      .limit(limit + 1);
-
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    const last = pageRows[pageRows.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-        : null;
-
-    return { activities: parseStringify(pageRows), nextCursor };
+    return await unstable_cache(
+      () => fetchActivityPage(workspaceId, cursor, limit),
+      ["recent-activity", workspaceId, String(limit), cursor ?? "-"],
+      { tags: [activityTag(workspaceId)], revalidate: 30 }
+    )();
   } catch (error) {
     console.error(`Failed to get recent activity: ${error}`);
     return { activities: [], nextCursor: null };

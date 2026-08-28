@@ -2,7 +2,7 @@
 
 import { nanoid } from "nanoid";
 import { liveblocks } from "@/lib/liveblocks";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import {
@@ -27,11 +27,13 @@ import {
   user,
 } from "@collabnow/db";
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
+import { documentsTag, activityTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
 import type {
   CreateDocumentParams,
   ShareDocumentParams,
   RoomDocument,
+  DocumentFilter,
   GetDocumentsForUserOptions,
   PaginatedDocuments,
 } from "../types";
@@ -47,6 +49,9 @@ function userDocumentAccessCondition(userId: string) {
   return or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id));
 }
 
+// Deliberately NOT cached — this backs the 50-document limit check in
+// `createDocument` and must always see the latest committed count to avoid a
+// race under concurrent creates.
 async function countUserDocuments(userId: string): Promise<number> {
   const [{ count: total }] = await db
     .select({ count: count() })
@@ -60,6 +65,26 @@ async function countUserDocuments(userId: string): Promise<number> {
     )
     .where(userDocumentAccessCondition(userId));
   return total;
+}
+
+// Collaborators (plus the creator) whose cached document list includes this
+// document — used to invalidate the right per-user cache tags on mutations that
+// affect shared visibility (delete, archive).
+async function getDocumentStakeholderIds(
+  documentId: string,
+  creatorId: string
+): Promise<string[]> {
+  const collaborators = await db
+    .select({ userId: documentCollaborator.userId })
+    .from(documentCollaborator)
+    .where(eq(documentCollaborator.documentId, documentId));
+  return Array.from(new Set([creatorId, ...collaborators.map((c) => c.userId)]));
+}
+
+function invalidateDocumentsCache(userIds: string[]) {
+  for (const id of new Set(userIds)) {
+    updateTag(documentsTag(id));
+  }
 }
 
 export const createDocument = async ({
@@ -110,8 +135,11 @@ export const createDocument = async ({
         action: "created",
         metadata: JSON.stringify({ roomId, title: "Untitled document" }),
       });
+
+      updateTag(activityTag(workspaceId));
     }
 
+    invalidateDocumentsCache([userId]);
     revalidatePath("/dashboard");
     return parseStringify(room);
   } catch (error) {
@@ -141,127 +169,154 @@ export const getDocument = async ({
   }
 };
 
-// Fetches one keyset-paginated page of a user's document list, filtered by
-// tab (all/recent/starred/shared/archived) and optionally by title search.
-// Ordered by `(createdAt, id)` descending so pages stay stable even as new
-// documents are inserted between fetches (unlike offset-based pagination).
+// Runs the actual query for one page of a user's document list. Split out from
+// `getDocumentsForUser` so the `unstable_cache` wrapper only ever sees
+// plain, already-normalized arguments (dynamic tags/keys are derived from these
+// same arguments in the exported function below).
+async function fetchDocumentsPage({
+  userId,
+  filter,
+  cursor,
+  limit,
+  search,
+}: {
+  userId: string;
+  filter: DocumentFilter;
+  cursor?: string | null;
+  limit: number;
+  search?: string;
+}): Promise<PaginatedDocuments> {
+  const conditions = [userDocumentAccessCondition(userId)];
+
+  if (filter === "shared") {
+    conditions.push(ne(document.creatorId, userId));
+    conditions.push(eq(document.isArchived, false));
+  } else if (filter === "archived") {
+    conditions.push(eq(document.isArchived, true));
+    conditions.push(eq(document.creatorId, userId));
+  } else if (filter === "all") {
+    conditions.push(eq(document.isArchived, false));
+  }
+  // "recent" intentionally applies no archive condition, matching the previous
+  // in-memory behavior of showing the N most recently created docs regardless
+  // of archive state. "starred" is narrowed further below.
+
+  if (search) {
+    conditions.push(ilike(document.title, `%${search}%`));
+  }
+
+  if (filter === "starred") {
+    const starredRows = await db
+      .select({ documentId: documentStar.documentId })
+      .from(documentStar)
+      .where(eq(documentStar.userId, userId));
+    const starredDocIds = starredRows.map((r) => r.documentId);
+    if (starredDocIds.length === 0) return { documents: [], nextCursor: null };
+    conditions.push(inArray(document.id, starredDocIds));
+  }
+
+  const decodedCursor = decodeCursor(cursor);
+  if (decodedCursor) {
+    const cursorCreatedAt = new Date(decodedCursor.createdAt);
+    conditions.push(
+      or(
+        lt(document.createdAt, cursorCreatedAt),
+        and(
+          eq(document.createdAt, cursorCreatedAt),
+          lt(document.id, decodedCursor.id)
+        )
+      )
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: document.id,
+      roomId: document.roomId,
+      title: document.title,
+      creatorId: document.creatorId,
+      createdAt: document.createdAt,
+      isArchived: document.isArchived,
+    })
+    .from(document)
+    .leftJoin(
+      documentCollaborator,
+      and(
+        eq(documentCollaborator.documentId, document.id),
+        eq(documentCollaborator.userId, userId)
+      )
+    )
+    .where(and(...conditions))
+    .orderBy(desc(document.createdAt), desc(document.id))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  if (pageRows.length === 0) return { documents: [], nextCursor: null };
+
+  const starredRows = await db
+    .select({ documentId: documentStar.documentId })
+    .from(documentStar)
+    .where(
+      and(
+        eq(documentStar.userId, userId),
+        inArray(
+          documentStar.documentId,
+          pageRows.map((r) => r.id)
+        )
+      )
+    );
+  const pageStarredSet = new Set(starredRows.map((r) => r.documentId));
+
+  const documents: RoomDocument[] = pageRows.map((r) => ({
+    id: r.roomId,
+    metadata: { title: r.title, creatorId: r.creatorId },
+    createdAt: r.createdAt.toISOString(),
+    isStarred: filter === "starred" ? true : pageStarredSet.has(r.id),
+    isArchived: r.isArchived,
+  }));
+
+  const last = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore
+    ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+    : null;
+
+  return { documents, nextCursor };
+}
+
 export const getDocumentsForUser = async (
   userId: string,
   options: GetDocumentsForUserOptions = {}
 ): Promise<PaginatedDocuments> => {
+  const filter = options.filter ?? "all";
+  const search = options.search?.trim() || undefined;
+  const cursor = options.cursor ?? null;
+  const limit =
+    options.limit ?? (filter === "recent" ? RECENT_DOCUMENTS_LIMIT : DOCUMENTS_PAGE_SIZE);
+
   try {
-    const filter = options.filter ?? "all";
-    const search = options.search?.trim() || undefined;
-    const limit =
-      options.limit ?? (filter === "recent" ? RECENT_DOCUMENTS_LIMIT : DOCUMENTS_PAGE_SIZE);
-
-    const conditions = [userDocumentAccessCondition(userId)];
-
-    if (filter === "shared") {
-      conditions.push(ne(document.creatorId, userId));
-      conditions.push(eq(document.isArchived, false));
-    } else if (filter === "archived") {
-      conditions.push(eq(document.isArchived, true));
-      conditions.push(eq(document.creatorId, userId));
-    } else if (filter === "all") {
-      conditions.push(eq(document.isArchived, false));
-    }
-    // "recent" intentionally applies no archive condition, matching the previous
-    // in-memory behavior of showing the N most recently created docs regardless
-    // of archive state. "starred" is narrowed further below.
-
-    if (search) {
-      conditions.push(ilike(document.title, `%${search}%`));
-    }
-
-    if (filter === "starred") {
-      const starredRows = await db
-        .select({ documentId: documentStar.documentId })
-        .from(documentStar)
-        .where(eq(documentStar.userId, userId));
-      const starredDocIds = starredRows.map((r) => r.documentId);
-      if (starredDocIds.length === 0) return { documents: [], nextCursor: null };
-      conditions.push(inArray(document.id, starredDocIds));
-    }
-
-    const decodedCursor = decodeCursor(options.cursor);
-    if (decodedCursor) {
-      const cursorCreatedAt = new Date(decodedCursor.createdAt);
-      conditions.push(
-        or(
-          lt(document.createdAt, cursorCreatedAt),
-          and(
-            eq(document.createdAt, cursorCreatedAt),
-            lt(document.id, decodedCursor.id)
-          )
-        )
-      );
-    }
-
-    const rows = await db
-      .select({
-        id: document.id,
-        roomId: document.roomId,
-        title: document.title,
-        creatorId: document.creatorId,
-        createdAt: document.createdAt,
-        isArchived: document.isArchived,
-      })
-      .from(document)
-      .leftJoin(
-        documentCollaborator,
-        and(
-          eq(documentCollaborator.documentId, document.id),
-          eq(documentCollaborator.userId, userId)
-        )
-      )
-      .where(and(...conditions))
-      .orderBy(desc(document.createdAt), desc(document.id))
-      .limit(limit + 1);
-
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-
-    if (pageRows.length === 0) return { documents: [], nextCursor: null };
-
-    const starredRows = await db
-      .select({ documentId: documentStar.documentId })
-      .from(documentStar)
-      .where(
-        and(
-          eq(documentStar.userId, userId),
-          inArray(
-            documentStar.documentId,
-            pageRows.map((r) => r.id)
-          )
-        )
-      );
-    const pageStarredSet = new Set(starredRows.map((r) => r.documentId));
-
-    const documents: RoomDocument[] = pageRows.map((r) => ({
-      id: r.roomId,
-      metadata: { title: r.title, creatorId: r.creatorId },
-      createdAt: r.createdAt.toISOString(),
-      isStarred: filter === "starred" ? true : pageStarredSet.has(r.id),
-      isArchived: r.isArchived,
-    }));
-
-    const last = pageRows[pageRows.length - 1];
-    const nextCursor = hasMore
-      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-      : null;
-
-    return { documents, nextCursor };
+    return await unstable_cache(
+      () => fetchDocumentsPage({ userId, filter, cursor, limit, search }),
+      ["documents-for-user", userId, filter, String(limit), cursor ?? "-", search ?? "-"],
+      { tags: [documentsTag(userId)], revalidate: 60 }
+    )();
   } catch (error) {
     console.error(`Error getting documents: ${error}`);
     return { documents: [], nextCursor: null };
   }
 };
 
-// Lightweight total (not filtered/paginated) used for the "X / 50 documents" display.
+// Lightweight total (not filtered/paginated) used for the "X / 50 documents"
+// display — kept separate from `countUserDocuments` so this one can be cached
+// without affecting the doc-limit check's correctness.
 export const getDocumentCountForUser = async (userId: string): Promise<number> => {
   try {
-    return await countUserDocuments(userId);
+    return await unstable_cache(
+      () => countUserDocuments(userId),
+      ["documents-count-for-user", userId],
+      { tags: [documentsTag(userId)], revalidate: 60 }
+    )();
   } catch (error) {
     console.error(`Error counting documents: ${error}`);
     return 0;
@@ -335,21 +390,25 @@ async function grantCollaboratorAccess(
   }
 }
 
-// Mirrors a Liveblocks access revoke into `documentCollaborator`.
-async function revokeCollaboratorAccess(roomId: string, email: string) {
+// Mirrors a Liveblocks access revoke into `documentCollaborator`. Returns the
+// revoked user's id (or null) so callers can invalidate their document-list cache.
+async function revokeCollaboratorAccess(
+  roomId: string,
+  email: string
+): Promise<string | null> {
   const [doc] = await db
     .select({ id: document.id })
     .from(document)
     .where(eq(document.roomId, roomId))
     .limit(1);
-  if (!doc) return;
+  if (!doc) return null;
 
   const [targetUser] = await db
     .select({ id: user.id })
     .from(user)
     .where(eq(user.email, email))
     .limit(1);
-  if (!targetUser) return;
+  if (!targetUser) return null;
 
   await db
     .delete(documentCollaborator)
@@ -359,6 +418,8 @@ async function revokeCollaboratorAccess(roomId: string, email: string) {
         eq(documentCollaborator.userId, targetUser.id)
       )
     );
+
+  return targetUser.id;
 }
 
 export const updateDocumentAccess = async ({
@@ -447,7 +508,10 @@ export const updateDocumentAccess = async ({
       });
     }
 
+    // Sharing changes what shows up in the target user's "shared" filter/list.
+    invalidateDocumentsCache([targetUser.id]);
     revalidatePath(`/documents/${roomId}`);
+    revalidatePath("/dashboard");
     return {};
   } catch (error) {
     console.error(`Error updating document access: ${error}`);
@@ -473,9 +537,11 @@ export const removeCollaborator = async ({
       usersAccesses: { [email]: null },
     });
 
-    await revokeCollaboratorAccess(roomId, email);
+    const revokedUserId = await revokeCollaboratorAccess(roomId, email);
+    if (revokedUserId) invalidateDocumentsCache([revokedUserId]);
 
     revalidatePath(`/documents/${roomId}`);
+    revalidatePath("/dashboard");
     return parseStringify(updatedRoom);
   } catch (error) {
     console.error(`Error removing collaborator: ${error}`);
@@ -506,9 +572,11 @@ export const getDocumentCollaborators = async (roomId: string) => {
 
 export const deleteDocument = async (roomId: string) => {
   try {
-    // Look up document for activity logging before deleting
+    // Look up document (and its collaborators, before the cascade delete removes
+    // them) for activity logging and cache invalidation.
     const [doc] = await db
       .select({
+        id: document.id,
         workspaceId: document.workspaceId,
         creatorId: document.creatorId,
         title: document.title,
@@ -516,6 +584,10 @@ export const deleteDocument = async (roomId: string) => {
       .from(document)
       .where(eq(document.roomId, roomId))
       .limit(1);
+
+    const stakeholderIds = doc
+      ? await getDocumentStakeholderIds(doc.id, doc.creatorId)
+      : [];
 
     await liveblocks.deleteRoom(roomId);
     await db.delete(document).where(eq(document.roomId, roomId));
@@ -527,6 +599,9 @@ export const deleteDocument = async (roomId: string) => {
         action: "deleted",
         metadata: JSON.stringify({ roomId, title: doc.title }),
       });
+
+      invalidateDocumentsCache(stakeholderIds);
+      updateTag(activityTag(doc.workspaceId));
     }
   } catch (error) {
     console.error(`Error deleting document: ${error}`);
@@ -569,6 +644,8 @@ export const toggleStarDocument = async (roomId: string, userId: string) => {
       });
     }
 
+    // Starring is per-user, so only the acting user's cached list is affected.
+    invalidateDocumentsCache([userId]);
     revalidatePath("/dashboard");
     return { starred: !existing };
   } catch (error) {
@@ -586,6 +663,7 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
         id: document.id,
         isArchived: document.isArchived,
         workspaceId: document.workspaceId,
+        creatorId: document.creatorId,
       })
       .from(document)
       .where(eq(document.roomId, roomId))
@@ -606,6 +684,11 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
       metadata: JSON.stringify({ roomId }),
     });
 
+    // Archiving/unarchiving changes what shows up in every collaborator's
+    // "all"/"shared"/"archived" filters, not just the acting user's.
+    const stakeholderIds = await getDocumentStakeholderIds(doc.id, doc.creatorId);
+    invalidateDocumentsCache(stakeholderIds);
+    updateTag(activityTag(doc.workspaceId));
     revalidatePath("/dashboard");
     return { archived: newValue };
   } catch (error) {
@@ -613,3 +696,4 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
     throw error;
   }
 };
+
