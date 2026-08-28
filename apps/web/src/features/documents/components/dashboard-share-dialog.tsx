@@ -66,7 +66,7 @@ export default function DashboardShareDialog({
     }
     setError("");
     setLoading(true);
-    await updateDocumentAccess({
+    const result = await updateDocumentAccess({
       roomId,
       email,
       userType,
@@ -78,8 +78,14 @@ export default function DashboardShareDialog({
         color: "",
       },
     });
-    setEmail("");
     setLoading(false);
+
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+
+    setEmail("");
     // Refresh collaborators
     const updated = await getDocumentCollaborators(roomId);
     setCollaborators(updated);

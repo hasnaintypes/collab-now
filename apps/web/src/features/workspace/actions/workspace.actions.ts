@@ -9,7 +9,18 @@ import {
   activityLog,
   user,
 } from "@collabnow/db";
-import { eq, and, ilike, or, gt, notInArray, count, desc } from "drizzle-orm";
+import {
+  eq,
+  and,
+  ilike,
+  or,
+  gt,
+  notInArray,
+  count,
+  desc,
+  asc,
+  sql,
+} from "drizzle-orm";
 import { parseStringify } from "@/lib/utils";
 import { sendMail, inviteEmailHtml } from "@collabnow/email";
 import type { WorkspaceRole } from "../types";
@@ -19,7 +30,9 @@ export const getOrCreateWorkspace = async (
   userName: string
 ) => {
   try {
-    // Check if user already belongs to a workspace
+    // A user can belong to more than one workspace (their own auto-created one, plus
+    // any they've joined via invite). Deterministically prefer the one they own, then
+    // fall back to whichever membership is oldest, rather than an arbitrary DB row order.
     const existing = await db
       .select({
         workspaceId: workspace.id,
@@ -30,6 +43,10 @@ export const getOrCreateWorkspace = async (
       .from(workspaceMember)
       .innerJoin(workspace, eq(workspaceMember.workspaceId, workspace.id))
       .where(eq(workspaceMember.userId, userId))
+      .orderBy(
+        desc(sql`${workspaceMember.role} = 'owner'`),
+        asc(workspaceMember.joinedAt)
+      )
       .limit(1);
 
     if (existing.length > 0) {

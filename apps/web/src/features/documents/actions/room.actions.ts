@@ -11,6 +11,7 @@ import {
   document,
   documentStar,
   documentCollaborator,
+  workspaceMember,
   activityLog,
   user,
 } from "@collabnow/db";
@@ -267,8 +268,42 @@ export const updateDocumentAccess = async ({
   email,
   userType,
   updatedBy,
-}: ShareDocumentParams) => {
+}: ShareDocumentParams): Promise<{ error?: string }> => {
   try {
+    const [doc] = await db
+      .select({ workspaceId: document.workspaceId })
+      .from(document)
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+    if (!doc) return { error: "Document not found." };
+
+    const [targetUser] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+    if (!targetUser) {
+      return {
+        error: `${email} needs a Collab Now account before they can be added.`,
+      };
+    }
+
+    const [membership] = await db
+      .select({ id: workspaceMember.id })
+      .from(workspaceMember)
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, doc.workspaceId),
+          eq(workspaceMember.userId, targetUser.id)
+        )
+      )
+      .limit(1);
+    if (!membership) {
+      return {
+        error: `${email} isn't a member of this workspace yet. Invite them to the workspace first.`,
+      };
+    }
+
     const usersAccesses: RoomAccesses = {
       [email]: getAccessType(userType) as AccessType,
     };
@@ -315,9 +350,10 @@ export const updateDocumentAccess = async ({
     }
 
     revalidatePath(`/documents/${roomId}`);
-    return parseStringify(room);
+    return {};
   } catch (error) {
     console.error(`Error updating document access: ${error}`);
+    return { error: "Something went wrong while updating access. Please try again." };
   }
 };
 

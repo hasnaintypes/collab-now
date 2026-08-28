@@ -30,14 +30,16 @@ export default function CollaboratorRow({
   const [loading, setLoading] = useState(false);
 
   const handleTypeChange = async (type: string) => {
+    const previousType = userType;
     setLoading(true);
-    await updateDocumentAccess({
+    const result = await updateDocumentAccess({
       roomId,
       email,
       userType: type as UserType,
       updatedBy: user,
     });
     setLoading(false);
+    if (result?.error) setUserType(previousType);
   };
 
   const handleRemove = async () => {

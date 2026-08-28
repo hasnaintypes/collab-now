@@ -42,14 +42,20 @@ export default function ShareDialog({
     }
     setError("");
     setLoading(true);
-    await updateDocumentAccess({
+    const result = await updateDocumentAccess({
       roomId,
       email,
       userType,
       updatedBy: user.info,
     });
-    setEmail("");
     setLoading(false);
+
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+
+    setEmail("");
   };
 
   return (
