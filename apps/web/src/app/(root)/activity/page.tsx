@@ -19,7 +19,7 @@ export default async function ActivityPage() {
   const user = session.user;
 
   const workspaceData = await getOrCreateWorkspace(user.id, user.name);
-  const activities = await getRecentActivity(workspaceData.id, 50);
+  const { activities, nextCursor } = await getRecentActivity(workspaceData.id);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -51,7 +51,11 @@ export default async function ActivityPage() {
           </p>
         </header>
 
-        <ActivityFeed activities={activities} />
+        <ActivityFeed
+          workspaceId={workspaceData.id}
+          activities={activities}
+          nextCursor={nextCursor}
+        />
       </main>
     </div>
   );

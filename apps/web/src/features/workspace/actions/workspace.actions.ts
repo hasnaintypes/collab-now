@@ -15,15 +15,21 @@ import {
   ilike,
   or,
   gt,
+  lt,
   notInArray,
   count,
   desc,
   asc,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { parseStringify } from "@/lib/utils";
 import { sendMail, inviteEmailHtml } from "@collabnow/email";
+import { encodeCursor, decodeCursor } from "@/lib/pagination";
 import type { WorkspaceRole } from "../types";
+import type { GetActivityOptions, PaginatedActivity } from "../../activity/types";
+
+const ACTIVITY_PAGE_SIZE = 20;
 
 export const getOrCreateWorkspace = async (
   userId: string,
@@ -383,9 +389,34 @@ export const getPendingInvites = async (workspaceId: string) => {
   }
 };
 
-export const getRecentActivity = async (workspaceId: string, limit = 5) => {
+// Activity feed, paginated via `(createdAt, id)` keyset cursor rather than the
+// old fixed "last N" fetch — callers can keep calling with the previous
+// `nextCursor` to page back through full workspace history.
+export const getRecentActivity = async (
+  workspaceId: string,
+  options: GetActivityOptions = {}
+): Promise<PaginatedActivity> => {
   try {
-    const activities = await db
+    const limit = options.limit ?? ACTIVITY_PAGE_SIZE;
+    const conditions: (SQL<unknown> | undefined)[] = [
+      eq(activityLog.workspaceId, workspaceId),
+    ];
+
+    const decoded = decodeCursor(options.cursor);
+    if (decoded) {
+      const cursorCreatedAt = new Date(decoded.createdAt);
+      conditions.push(
+        or(
+          lt(activityLog.createdAt, cursorCreatedAt),
+          and(
+            eq(activityLog.createdAt, cursorCreatedAt),
+            lt(activityLog.id, decoded.id)
+          )
+        )
+      );
+    }
+
+    const rows = await db
       .select({
         id: activityLog.id,
         action: activityLog.action,
@@ -396,13 +427,21 @@ export const getRecentActivity = async (workspaceId: string, limit = 5) => {
       })
       .from(activityLog)
       .innerJoin(user, eq(activityLog.userId, user.id))
-      .where(eq(activityLog.workspaceId, workspaceId))
-      .orderBy(desc(activityLog.createdAt))
-      .limit(limit);
+      .where(and(...conditions))
+      .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
+      .limit(limit + 1);
 
-    return parseStringify(activities);
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const last = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+        : null;
+
+    return { activities: parseStringify(pageRows), nextCursor };
   } catch (error) {
     console.error(`Failed to get recent activity: ${error}`);
-    return [];
+    return { activities: [], nextCursor: null };
   }
 };

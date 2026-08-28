@@ -52,3 +52,17 @@ export type RoomDocument = {
   isStarred?: boolean;
   isArchived?: boolean;
 };
+
+export type DocumentFilter = "all" | "recent" | "starred" | "shared" | "archived";
+
+export type GetDocumentsForUserOptions = {
+  filter?: DocumentFilter;
+  cursor?: string | null;
+  limit?: number;
+  search?: string;
+};
+
+export type PaginatedDocuments = {
+  documents: RoomDocument[];
+  nextCursor: string | null;
+};

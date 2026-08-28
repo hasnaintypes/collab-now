@@ -3,7 +3,10 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { auth } from "@/features/auth/lib";
-import { getDocumentsForUser } from "@/features/documents/actions/room.actions";
+import {
+  getDocumentsForUser,
+  getDocumentCountForUser,
+} from "@/features/documents/actions/room.actions";
 import {
   getOrCreateWorkspace,
   getWorkspaceMembers,
@@ -16,7 +19,9 @@ import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
 import Sidebar from "@/features/workspace/components/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { RoomDocument } from "@/features/documents/types";
+import type { DocumentFilter } from "@/features/documents/types";
+
+const VALID_FILTERS: DocumentFilter[] = ["recent", "starred", "shared", "archived", "all"];
 
 export default async function DashboardPage({
   searchParams,
@@ -27,34 +32,17 @@ export default async function DashboardPage({
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const { filter } = await searchParams;
+  const { filter: rawFilter } = await searchParams;
+  const filter: DocumentFilter = VALID_FILTERS.includes(rawFilter as DocumentFilter)
+    ? (rawFilter as DocumentFilter)
+    : "all";
 
-  const enrichedDocs: RoomDocument[] = await getDocumentsForUser(user.id);
-  const docCount = enrichedDocs.length;
-
-  // Server-side filter
-  let filteredDocs = enrichedDocs;
-  if (filter === "recent") {
-    filteredDocs = [...enrichedDocs]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 10);
-  } else if (filter === "starred") {
-    filteredDocs = enrichedDocs.filter((doc) => doc.isStarred);
-  } else if (filter === "shared") {
-    filteredDocs = enrichedDocs.filter(
-      (doc) => doc.metadata.creatorId !== user.id && !doc.isArchived
-    );
-  } else if (filter === "archived") {
-    // Matches the pre-migration behavior: only documents the current user created.
-    filteredDocs = enrichedDocs.filter(
-      (doc) => doc.isArchived && doc.metadata.creatorId === user.id
-    );
-  } else {
-    // Default "all" view: hide archived documents
-    filteredDocs = enrichedDocs.filter((doc) => !doc.isArchived);
-  }
-
-  const workspaceData = await getOrCreateWorkspace(user.id, user.name);
+  const [{ documents: filteredDocs, nextCursor }, docCount, workspaceData] =
+    await Promise.all([
+      getDocumentsForUser(user.id, { filter }),
+      getDocumentCountForUser(user.id),
+      getOrCreateWorkspace(user.id, user.name),
+    ]);
   const members = await getWorkspaceMembers(workspaceData.id);
 
   const sidebarProps = {
@@ -124,12 +112,15 @@ export default async function DashboardPage({
             </header>
 
             {/* Documents Section */}
+            {/* Keyed by filter so switching tabs remounts with a clean pagination/search state */}
             <DocumentsSection
+              key={filter}
               documents={filteredDocs}
+              nextCursor={nextCursor}
               userId={user.id}
               email={user.email}
               workspaceId={workspaceData.id}
-              activeFilter={filter ?? "all"}
+              activeFilter={filter}
               currentUser={{
                 name: user.name,
                 email: user.email,
@@ -137,8 +128,8 @@ export default async function DashboardPage({
               }}
             />
 
-            {/* Bottom Bento Widgets — hidden on recent filter */}
-            {!filter && (
+            {/* Bottom Bento Widgets — hidden outside the default "all" view */}
+            {filter === "all" && (
               <section className="mt-20 grid grid-cols-1 gap-6 md:grid-cols-12">
                 {/* Storage Widget */}
                 <div className="group relative overflow-hidden rounded-sm bg-muted/40 p-10 md:col-span-8">

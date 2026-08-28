@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/features/auth/lib";
-import { getDocumentsForUser } from "@/features/documents/actions/room.actions";
+import {
+  getDocumentsForUser,
+  getDocumentCountForUser,
+} from "@/features/documents/actions/room.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
@@ -13,8 +16,10 @@ export default async function ProfilePage() {
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const recentDocuments = await getDocumentsForUser(user.id);
-  const docCount = recentDocuments.length;
+  const [{ documents: recentDocuments }, docCount] = await Promise.all([
+    getDocumentsForUser(user.id, { filter: "recent", limit: 5 }),
+    getDocumentCountForUser(user.id),
+  ]);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

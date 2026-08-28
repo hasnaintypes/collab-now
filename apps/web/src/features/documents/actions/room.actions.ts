@@ -5,7 +5,18 @@ import { liveblocks } from "@/lib/liveblocks";
 import { revalidatePath } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
 import { redirect } from "next/navigation";
-import { eq, and, or, isNotNull, inArray, desc, count } from "drizzle-orm";
+import {
+  eq,
+  and,
+  or,
+  ne,
+  lt,
+  isNotNull,
+  inArray,
+  ilike,
+  desc,
+  count,
+} from "drizzle-orm";
 import {
   db,
   document,
@@ -16,13 +27,40 @@ import {
   user,
 } from "@collabnow/db";
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
+import { encodeCursor, decodeCursor } from "@/lib/pagination";
 import type {
   CreateDocumentParams,
   ShareDocumentParams,
   RoomDocument,
+  GetDocumentsForUserOptions,
+  PaginatedDocuments,
 } from "../types";
 
 const DOC_LIMIT = 50;
+const DOCUMENTS_PAGE_SIZE = 15;
+const RECENT_DOCUMENTS_LIMIT = 10;
+
+// A document is "the user's" if they created it or were added as a collaborator.
+// Shared by the doc-limit check, the count widget, and the paginated list query so
+// the three can never silently drift apart on what counts as "owned".
+function userDocumentAccessCondition(userId: string) {
+  return or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id));
+}
+
+async function countUserDocuments(userId: string): Promise<number> {
+  const [{ count: total }] = await db
+    .select({ count: count() })
+    .from(document)
+    .leftJoin(
+      documentCollaborator,
+      and(
+        eq(documentCollaborator.documentId, document.id),
+        eq(documentCollaborator.userId, userId)
+      )
+    )
+    .where(userDocumentAccessCondition(userId));
+  return total;
+}
 
 export const createDocument = async ({
   userId,
@@ -31,19 +69,7 @@ export const createDocument = async ({
 }: CreateDocumentParams) => {
   try {
     // Enforce 50-document limit (documents the user created or was added to as a collaborator)
-    const [{ count: existingCount }] = await db
-      .select({ count: count() })
-      .from(document)
-      .leftJoin(
-        documentCollaborator,
-        and(
-          eq(documentCollaborator.documentId, document.id),
-          eq(documentCollaborator.userId, userId)
-        )
-      )
-      .where(
-        or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id))
-      );
+    const existingCount = await countUserDocuments(userId);
 
     if (existingCount >= DOC_LIMIT) {
       throw new Error(
@@ -115,10 +141,63 @@ export const getDocument = async ({
   }
 };
 
+// Fetches one keyset-paginated page of a user's document list, filtered by
+// tab (all/recent/starred/shared/archived) and optionally by title search.
+// Ordered by `(createdAt, id)` descending so pages stay stable even as new
+// documents are inserted between fetches (unlike offset-based pagination).
 export const getDocumentsForUser = async (
-  userId: string
-): Promise<RoomDocument[]> => {
+  userId: string,
+  options: GetDocumentsForUserOptions = {}
+): Promise<PaginatedDocuments> => {
   try {
+    const filter = options.filter ?? "all";
+    const search = options.search?.trim() || undefined;
+    const limit =
+      options.limit ?? (filter === "recent" ? RECENT_DOCUMENTS_LIMIT : DOCUMENTS_PAGE_SIZE);
+
+    const conditions = [userDocumentAccessCondition(userId)];
+
+    if (filter === "shared") {
+      conditions.push(ne(document.creatorId, userId));
+      conditions.push(eq(document.isArchived, false));
+    } else if (filter === "archived") {
+      conditions.push(eq(document.isArchived, true));
+      conditions.push(eq(document.creatorId, userId));
+    } else if (filter === "all") {
+      conditions.push(eq(document.isArchived, false));
+    }
+    // "recent" intentionally applies no archive condition, matching the previous
+    // in-memory behavior of showing the N most recently created docs regardless
+    // of archive state. "starred" is narrowed further below.
+
+    if (search) {
+      conditions.push(ilike(document.title, `%${search}%`));
+    }
+
+    if (filter === "starred") {
+      const starredRows = await db
+        .select({ documentId: documentStar.documentId })
+        .from(documentStar)
+        .where(eq(documentStar.userId, userId));
+      const starredDocIds = starredRows.map((r) => r.documentId);
+      if (starredDocIds.length === 0) return { documents: [], nextCursor: null };
+      conditions.push(inArray(document.id, starredDocIds));
+    }
+
+    const decodedCursor = decodeCursor(options.cursor);
+    if (decodedCursor) {
+      const cursorCreatedAt = new Date(decodedCursor.createdAt);
+      conditions.push(
+        or(
+          lt(document.createdAt, cursorCreatedAt),
+          and(
+            eq(document.createdAt, cursorCreatedAt),
+            lt(document.id, decodedCursor.id)
+          )
+        )
+      );
+    }
+
     const rows = await db
       .select({
         id: document.id,
@@ -136,12 +215,14 @@ export const getDocumentsForUser = async (
           eq(documentCollaborator.userId, userId)
         )
       )
-      .where(
-        or(eq(document.creatorId, userId), isNotNull(documentCollaborator.id))
-      )
-      .orderBy(desc(document.createdAt));
+      .where(and(...conditions))
+      .orderBy(desc(document.createdAt), desc(document.id))
+      .limit(limit + 1);
 
-    if (rows.length === 0) return [];
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+    if (pageRows.length === 0) return { documents: [], nextCursor: null };
 
     const starredRows = await db
       .select({ documentId: documentStar.documentId })
@@ -151,22 +232,39 @@ export const getDocumentsForUser = async (
           eq(documentStar.userId, userId),
           inArray(
             documentStar.documentId,
-            rows.map((r) => r.id)
+            pageRows.map((r) => r.id)
           )
         )
       );
-    const starredSet = new Set(starredRows.map((r) => r.documentId));
+    const pageStarredSet = new Set(starredRows.map((r) => r.documentId));
 
-    return rows.map((r) => ({
+    const documents: RoomDocument[] = pageRows.map((r) => ({
       id: r.roomId,
       metadata: { title: r.title, creatorId: r.creatorId },
       createdAt: r.createdAt.toISOString(),
-      isStarred: starredSet.has(r.id),
+      isStarred: filter === "starred" ? true : pageStarredSet.has(r.id),
       isArchived: r.isArchived,
     }));
+
+    const last = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore
+      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+      : null;
+
+    return { documents, nextCursor };
   } catch (error) {
     console.error(`Error getting documents: ${error}`);
-    return [];
+    return { documents: [], nextCursor: null };
+  }
+};
+
+// Lightweight total (not filtered/paginated) used for the "X / 50 documents" display.
+export const getDocumentCountForUser = async (userId: string): Promise<number> => {
+  try {
+    return await countUserDocuments(userId);
+  } catch (error) {
+    console.error(`Error counting documents: ${error}`);
+    return 0;
   }
 };
 
@@ -515,4 +613,3 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
     throw error;
   }
 };
-

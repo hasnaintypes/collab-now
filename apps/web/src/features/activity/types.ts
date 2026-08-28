@@ -18,3 +18,13 @@ export type ActivityItem = {
   userName: string;
   userImage: string | null;
 };
+
+export type GetActivityOptions = {
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type PaginatedActivity = {
+  activities: ActivityItem[];
+  nextCursor: string | null;
+};

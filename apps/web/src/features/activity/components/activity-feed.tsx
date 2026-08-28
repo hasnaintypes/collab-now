@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import {
   FileText,
   Trash2,
@@ -7,8 +10,11 @@ import {
   Archive,
   ArchiveRestore,
   Star,
+  Loader2,
 } from "lucide-react";
 import { dateConverter } from "@/lib/utils";
+import { getRecentActivity } from "@/features/workspace/actions/workspace.actions";
+import { Button } from "@/components/ui/button";
 import type { ActivityItem } from "../types";
 
 const actionConfig: Record<
@@ -27,10 +33,27 @@ const actionConfig: Record<
 };
 
 export default function ActivityFeed({
-  activities,
+  workspaceId,
+  activities: initialActivities,
+  nextCursor: initialNextCursor,
 }: {
+  workspaceId: string;
   activities: ActivityItem[];
+  nextCursor: string | null;
 }) {
+  const [activities, setActivities] = useState<ActivityItem[]>(initialActivities);
+  const [cursor, setCursor] = useState<string | null>(initialNextCursor);
+  const [isLoadingMore, startTransition] = useTransition();
+
+  const handleLoadMore = () => {
+    if (!cursor || isLoadingMore) return;
+    startTransition(async () => {
+      const result = await getRecentActivity(workspaceId, { cursor });
+      setActivities((prev) => [...prev, ...result.activities]);
+      setCursor(result.nextCursor);
+    });
+  };
+
   if (activities.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border/50 py-24 text-center">
@@ -93,6 +116,21 @@ export default function ActivityFeed({
           </div>
         );
       })}
+
+      {cursor && (
+        <div className="flex justify-center pt-8">
+          <Button variant="outline" onClick={handleLoadMore} disabled={isLoadingMore}>
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Load more"
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,19 +1,37 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
-import { FileText, Search, Star, Archive, ArchiveRestore } from "lucide-react";
+import {
+  FileText,
+  Search,
+  Star,
+  Archive,
+  ArchiveRestore,
+  Loader2,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn, dateConverter } from "@/lib/utils";
-import { toggleStarDocument, toggleArchiveDocument } from "../actions/room.actions";
+import {
+  toggleStarDocument,
+  toggleArchiveDocument,
+  getDocumentsForUser,
+} from "../actions/room.actions";
 import { Button } from "@/components/ui/button";
 import AddDocumentBtn from "./add-document-btn";
 import DeleteDocumentDialog from "./delete-document-dialog";
 import DashboardShareDialog from "./dashboard-share-dialog";
-import type { RoomDocument } from "../types";
+import type { DocumentFilter, RoomDocument } from "../types";
+
+const SEARCH_DEBOUNCE_MS = 300;
+// Search always queries the full backing set (bounded by the 50-doc/user cap),
+// not just the currently loaded page, so results never regress relative to the
+// old client-side "search everything" behavior.
+const SEARCH_RESULT_LIMIT = 50;
 
 export default function DocumentsSection({
   documents,
+  nextCursor,
   userId,
   email,
   workspaceId,
@@ -21,77 +39,97 @@ export default function DocumentsSection({
   currentUser,
 }: {
   documents: RoomDocument[];
+  nextCursor: string | null;
   userId: string;
   email: string;
   workspaceId: string;
-  activeFilter: string;
+  activeFilter: DocumentFilter;
   currentUser: { name: string; email: string; avatar: string };
 }) {
+  // `activeFilter` is passed as this component's React `key` from the parent
+  // (switching filter tabs is a new server render), so a fresh mount — and
+  // fresh initial state below — is all that's needed to pick up the new page;
+  // no reset-on-prop-change effect required.
+  const [items, setItems] = useState<RoomDocument[]>(documents);
+  const [cursor, setCursor] = useState<string | null>(nextCursor);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<RoomDocument[] | null>(null);
+  const [isLoadingMore, startLoadMoreTransition] = useTransition();
+  const [isSearching, startSearchTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Optimistic star/archive state
-  const [starredSet, setStarredSet] = useState<Set<string>>(
-    () => new Set(documents.filter((d) => d.isStarred).map((d) => d.id))
-  );
-  const [archivedSet, setArchivedSet] = useState<Set<string>>(
-    () => new Set(documents.filter((d) => d.isArchived).map((d) => d.id))
-  );
-
-  const handleToggleStar = async (roomId: string) => {
-    setStarredSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(roomId)) next.delete(roomId);
-      else next.add(roomId);
-      return next;
-    });
-    try {
-      await toggleStarDocument(roomId, userId);
-    } catch {
-      // Revert on error
-      setStarredSet((prev) => {
-        const next = new Set(prev);
-        if (next.has(roomId)) next.delete(roomId);
-        else next.add(roomId);
-        return next;
-      });
-    }
-  };
-
-  const handleToggleArchive = async (roomId: string) => {
-    setArchivedSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(roomId)) next.delete(roomId);
-      else next.add(roomId);
-      return next;
-    });
-    try {
-      await toggleArchiveDocument(roomId, userId);
-    } catch {
-      setArchivedSet((prev) => {
-        const next = new Set(prev);
-        if (next.has(roomId)) next.delete(roomId);
-        else next.add(roomId);
-        return next;
-      });
-    }
-  };
 
   // Debounce search query
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setDebouncedQuery(query);
-    }, 300);
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query]);
 
-  const filtered = documents.filter((doc) =>
-    doc.metadata.title.toLowerCase().includes(debouncedQuery.toLowerCase())
-  );
+  // Search queries the server for the full matching set instead of filtering
+  // only the currently-loaded page.
+  useEffect(() => {
+    startSearchTransition(async () => {
+      if (!debouncedQuery) {
+        setSearchResults(null);
+        return;
+      }
+      const result = await getDocumentsForUser(userId, {
+        filter: activeFilter,
+        search: debouncedQuery,
+        limit: SEARCH_RESULT_LIMIT,
+      });
+      setSearchResults(result.documents);
+    });
+  }, [debouncedQuery, activeFilter, userId]);
+
+  const applyToggle = (
+    list: RoomDocument[],
+    roomId: string,
+    key: "isStarred" | "isArchived"
+  ) =>
+    list.map((d) => (d.id === roomId ? { ...d, [key]: !d[key] } : d));
+
+  const handleToggleStar = async (roomId: string) => {
+    setItems((prev) => applyToggle(prev, roomId, "isStarred"));
+    setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isStarred") : prev));
+    try {
+      await toggleStarDocument(roomId, userId);
+    } catch {
+      // Revert on error
+      setItems((prev) => applyToggle(prev, roomId, "isStarred"));
+      setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isStarred") : prev));
+    }
+  };
+
+  const handleToggleArchive = async (roomId: string) => {
+    setItems((prev) => applyToggle(prev, roomId, "isArchived"));
+    setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isArchived") : prev));
+    try {
+      await toggleArchiveDocument(roomId, userId);
+    } catch {
+      setItems((prev) => applyToggle(prev, roomId, "isArchived"));
+      setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isArchived") : prev));
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (!cursor || isLoadingMore) return;
+    startLoadMoreTransition(async () => {
+      const result = await getDocumentsForUser(userId, {
+        filter: activeFilter,
+        cursor,
+      });
+      setItems((prev) => [...prev, ...result.documents]);
+      setCursor(result.nextCursor);
+    });
+  };
+
+  const displayed = searchResults ?? items;
 
   const filterLabels: Record<string, string> = {
     recent: "Recent Documents",
@@ -102,11 +140,11 @@ export default function DocumentsSection({
   };
 
   const sectionLabel = debouncedQuery
-    ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""}`
+    ? `${displayed.length} result${displayed.length !== 1 ? "s" : ""}`
     : filterLabels[activeFilter] || "All Documents";
 
   // No documents at all (not a search result)
-  if (documents.length === 0) {
+  if (items.length === 0 && !debouncedQuery) {
     return (
       <section>
         <div className="mb-8 px-2">
@@ -163,7 +201,7 @@ export default function DocumentsSection({
       </div>
 
       {/* Search returned no results */}
-      {filtered.length === 0 && debouncedQuery ? (
+      {debouncedQuery && displayed.length === 0 && !isSearching ? (
         <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border/50 py-24 text-center">
           <Search className="mb-4 size-10 text-muted-foreground/50" />
           <h3 className="mb-1 text-lg font-bold tracking-tight">No results</h3>
@@ -172,12 +210,9 @@ export default function DocumentsSection({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map(({ id, metadata, createdAt }) => {
-            const isStarred = starredSet.has(id);
-            const isArchived = archivedSet.has(id);
-
-            return (
+        <>
+          <div className="space-y-3">
+            {displayed.map(({ id, metadata, createdAt, isStarred, isArchived }) => (
               <div
                 key={id}
                 className="group flex items-center justify-between rounded-sm bg-muted/40 p-5 transition-all duration-300 hover:bg-card hover:shadow-[0_20px_50px_rgba(0,0,0,0.04)]"
@@ -237,9 +272,24 @@ export default function DocumentsSection({
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+
+          {!debouncedQuery && cursor && (
+            <div className="mt-8 flex justify-center">
+              <Button variant="outline" onClick={handleLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load more"
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </section>
   );
