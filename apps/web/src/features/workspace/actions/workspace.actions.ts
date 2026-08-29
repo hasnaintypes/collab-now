@@ -1,6 +1,8 @@
 "use server";
 
 import { nanoid } from "nanoid";
+import { headers } from "next/headers";
+import { auth } from "@/features/auth/lib";
 import {
   db,
   workspace,
@@ -25,6 +27,7 @@ import {
 } from "drizzle-orm";
 import { updateTag, unstable_cache } from "next/cache";
 import { parseStringify } from "@/lib/utils";
+import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
 import { sendMail, inviteEmailHtml } from "@collabnow/email";
 import { activityTag, workspaceMembersTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
@@ -200,6 +203,24 @@ export const inviteMember = async ({
   invitedById: string;
 }) => {
   try {
+    // Re-derive identity server-side rather than trusting the caller-supplied
+    // `invitedById` (see docs/ROADMAP.md P0-6).
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session || session.user.id !== invitedById) {
+      return { error: "You must be signed in to invite members." };
+    }
+
+    const rateLimit = await checkRateLimit(
+      RATE_LIMITS.workspaceInvite,
+      session.user.id
+    );
+    if (!rateLimit.success) {
+      return {
+        error: `You're sending invites too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      };
+    }
+
     // Check if user is already a member (by email)
     const existingUser = await db
       .select({ id: user.id })

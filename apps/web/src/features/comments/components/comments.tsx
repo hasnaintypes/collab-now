@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { cn } from "@/lib/utils";
 import { useIsThreadActive } from "@liveblocks/react-lexical";
 import { Composer, Thread } from "@liveblocks/react-ui";
 import { useThreads } from "@liveblocks/react/suspense";
 import type { ThreadData, BaseMetadata } from "@liveblocks/client";
+import type { ComposerSubmitComment } from "@liveblocks/react-ui";
 import { MessageSquare } from "lucide-react";
+import { checkCommentRateLimit } from "../actions/comment.actions";
 
 function ThreadWrapper({ thread }: { thread: ThreadData<BaseMetadata> }) {
   const isActive = useIsThreadActive(thread.id);
@@ -25,10 +29,35 @@ function ThreadWrapper({ thread }: { thread: ThreadData<BaseMetadata> }) {
 
 export default function Comments() {
   const { threads } = useThreads();
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+
+  // Soft, best-effort gate — see `checkCommentRateLimit`'s doc comment for why
+  // this can't be a hard server-enforced limit given today's architecture
+  // (comments post directly from the client to Liveblocks).
+  const handleComposerSubmit = async (
+    _comment: ComposerSubmitComment,
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    const result = await checkCommentRateLimit();
+    if (!result.allowed) {
+      event.preventDefault();
+      setRateLimitError(
+        result.error ?? "Please slow down before commenting again."
+      );
+      return;
+    }
+    setRateLimitError(null);
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <Composer className="rounded-sm border border-border/50" />
+      <Composer
+        className="rounded-sm border border-border/50"
+        onComposerSubmit={handleComposerSubmit}
+      />
+      {rateLimitError && (
+        <p className="text-xs text-red-500">{rateLimitError}</p>
+      )}
       {threads.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <MessageSquare className="mb-3 size-8 text-muted-foreground/40" />

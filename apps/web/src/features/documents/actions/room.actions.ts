@@ -1,9 +1,12 @@
 "use server";
 
 import { nanoid } from "nanoid";
+import { headers } from "next/headers";
+import { auth } from "@/features/auth/lib";
 import { liveblocks } from "@/lib/liveblocks";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
+import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
 import { redirect } from "next/navigation";
 import {
   eq,
@@ -91,15 +94,42 @@ export const createDocument = async ({
   userId,
   email,
   workspaceId,
-}: CreateDocumentParams) => {
+}: CreateDocumentParams): Promise<
+  | { success: true; room: Awaited<ReturnType<typeof liveblocks.createRoom>> }
+  | { success: false; error: string; retryAfterSeconds?: number }
+> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `userId` — this is a server action, a spoofable trust boundary otherwise
+  // (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.id !== userId) {
+    return {
+      success: false,
+      error: "You must be signed in to create a document.",
+    };
+  }
+
+  const rateLimit = await checkRateLimit(
+    RATE_LIMITS.documentCreate,
+    session.user.id
+  );
+  if (!rateLimit.success) {
+    return {
+      success: false,
+      error: `You're creating documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    };
+  }
+
   try {
     // Enforce 50-document limit (documents the user created or was added to as a collaborator)
     const existingCount = await countUserDocuments(userId);
 
     if (existingCount >= DOC_LIMIT) {
-      throw new Error(
-        `Document limit reached. You can have up to ${DOC_LIMIT} documents.`
-      );
+      return {
+        success: false,
+        error: `Document limit reached. You can have up to ${DOC_LIMIT} documents.`,
+      };
     }
 
     const roomId = nanoid();
@@ -141,7 +171,7 @@ export const createDocument = async ({
 
     invalidateDocumentsCache([userId]);
     revalidatePath("/dashboard");
-    return parseStringify(room);
+    return { success: true, room: parseStringify(room) };
   } catch (error) {
     console.error(`Failed to create document: ${error}`);
     throw error;
@@ -427,8 +457,26 @@ export const updateDocumentAccess = async ({
   email,
   userType,
   updatedBy,
-}: ShareDocumentParams): Promise<{ error?: string }> => {
+}: ShareDocumentParams): Promise<{ error?: string; retryAfterSeconds?: number }> => {
   try {
+    // Re-derive identity server-side rather than trusting the caller-supplied
+    // `updatedBy` (see docs/ROADMAP.md P0-6).
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session || session.user.email !== updatedBy.email) {
+      return { error: "You must be signed in to share this document." };
+    }
+
+    const rateLimit = await checkRateLimit(
+      RATE_LIMITS.documentShare,
+      session.user.id
+    );
+    if (!rateLimit.success) {
+      return {
+        error: `You're sharing documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      };
+    }
+
     const [doc] = await db
       .select({ workspaceId: document.workspaceId })
       .from(document)
@@ -696,4 +744,3 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
     throw error;
   }
 };
-
