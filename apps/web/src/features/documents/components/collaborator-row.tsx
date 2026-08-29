@@ -28,10 +28,12 @@ export default function CollaboratorRow({
 }: CollaboratorProps) {
   const [userType, setUserType] = useState(collaborator.userType || "viewer");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleTypeChange = async (type: string) => {
     const previousType = userType;
     setLoading(true);
+    setError(null);
     const result = await updateDocumentAccess({
       roomId,
       email,
@@ -39,13 +41,18 @@ export default function CollaboratorRow({
       updatedBy: user,
     });
     setLoading(false);
-    if (result?.error) setUserType(previousType);
+    if (!result.success) {
+      setUserType(previousType);
+      setError(result.error);
+    }
   };
 
   const handleRemove = async () => {
     setLoading(true);
-    await removeCollaborator({ roomId, email });
+    setError(null);
+    const result = await removeCollaborator({ roomId, email });
     setLoading(false);
+    if (!result.success) setError(result.error);
   };
 
   return (
@@ -76,6 +83,7 @@ export default function CollaboratorRow({
           <p className="truncate text-xs text-muted-foreground">
             {collaborator.email}
           </p>
+          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
       </div>
 

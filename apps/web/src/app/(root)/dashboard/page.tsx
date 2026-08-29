@@ -37,13 +37,28 @@ export default async function DashboardPage({
     ? (rawFilter as DocumentFilter)
     : "all";
 
-  const [{ documents: filteredDocs, nextCursor }, docCount, workspaceData] =
-    await Promise.all([
-      getDocumentsForUser(user.id, { filter }),
-      getDocumentCountForUser(user.id),
-      getOrCreateWorkspace(user.id, user.name),
-    ]);
-  const members = await getWorkspaceMembers(workspaceData.id);
+  const [documentsResult, docCountResult, workspaceResult] = await Promise.all([
+    getDocumentsForUser(user.id, { filter }),
+    getDocumentCountForUser(user.id),
+    getOrCreateWorkspace(user.id, user.name),
+  ]);
+
+  // A missing workspace means nothing else on this page can render meaningfully.
+  if (!workspaceResult.success) {
+    throw new Error(workspaceResult.error);
+  }
+  const workspaceData = workspaceResult.data;
+
+  // Document list/count failures degrade gracefully to an empty state rather
+  // than failing the whole page — the user can still see the rest of the
+  // dashboard and retry (e.g. by switching filters).
+  const { documents: filteredDocs, nextCursor } = documentsResult.success
+    ? documentsResult.data
+    : { documents: [], nextCursor: null };
+  const docCount = docCountResult.success ? docCountResult.data : 0;
+
+  const membersResult = await getWorkspaceMembers(workspaceData.id);
+  const members = membersResult.success ? membersResult.data : [];
 
   const sidebarProps = {
     workspaceName: workspaceData.name,

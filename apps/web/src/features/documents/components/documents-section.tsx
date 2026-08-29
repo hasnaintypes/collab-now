@@ -83,7 +83,7 @@ export default function DocumentsSection({
         search: debouncedQuery,
         limit: SEARCH_RESULT_LIMIT,
       });
-      setSearchResults(result.documents);
+      setSearchResults(result.success ? result.data.documents : []);
     });
   }, [debouncedQuery, activeFilter, userId]);
 
@@ -97,9 +97,8 @@ export default function DocumentsSection({
   const handleToggleStar = async (roomId: string) => {
     setItems((prev) => applyToggle(prev, roomId, "isStarred"));
     setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isStarred") : prev));
-    try {
-      await toggleStarDocument(roomId, userId);
-    } catch {
+    const result = await toggleStarDocument(roomId, userId);
+    if (!result.success) {
       // Revert on error
       setItems((prev) => applyToggle(prev, roomId, "isStarred"));
       setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isStarred") : prev));
@@ -109,9 +108,8 @@ export default function DocumentsSection({
   const handleToggleArchive = async (roomId: string) => {
     setItems((prev) => applyToggle(prev, roomId, "isArchived"));
     setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isArchived") : prev));
-    try {
-      await toggleArchiveDocument(roomId, userId);
-    } catch {
+    const result = await toggleArchiveDocument(roomId, userId);
+    if (!result.success) {
       setItems((prev) => applyToggle(prev, roomId, "isArchived"));
       setSearchResults((prev) => (prev ? applyToggle(prev, roomId, "isArchived") : prev));
     }
@@ -124,8 +122,9 @@ export default function DocumentsSection({
         filter: activeFilter,
         cursor,
       });
-      setItems((prev) => [...prev, ...result.documents]);
-      setCursor(result.nextCursor);
+      if (!result.success) return;
+      setItems((prev) => [...prev, ...result.data.documents]);
+      setCursor(result.data.nextCursor);
     });
   };
 

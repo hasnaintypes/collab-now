@@ -41,9 +41,9 @@ export default function DashboardShareDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getDocumentCollaborators(roomId).then((users) => {
+    getDocumentCollaborators(roomId).then((result) => {
       if (cancelled) return;
-      setCollaborators(users);
+      setCollaborators(result.success ? result.data : []);
       setFetching(false);
     });
     return () => {
@@ -80,7 +80,7 @@ export default function DashboardShareDialog({
     });
     setLoading(false);
 
-    if (result?.error) {
+    if (!result.success) {
       setError(result.error);
       return;
     }
@@ -88,7 +88,7 @@ export default function DashboardShareDialog({
     setEmail("");
     // Refresh collaborators
     const updated = await getDocumentCollaborators(roomId);
-    setCollaborators(updated);
+    if (updated.success) setCollaborators(updated.data);
   };
 
   return (

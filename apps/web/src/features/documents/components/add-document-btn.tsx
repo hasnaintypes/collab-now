@@ -19,7 +19,7 @@ export default function AddDocumentBtn({ userId, email, workspaceId }: AddDocume
         setError(result.error);
         return;
       }
-      router.push(`/documents/${result.room.id}`);
+      router.push(`/documents/${result.data.id}`);
     } catch (error) {
       console.error(`Failed to create document: ${error}`);
       setError("Something went wrong. Please try again.");

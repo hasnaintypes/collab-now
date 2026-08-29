@@ -51,13 +51,13 @@ function SidebarInner({
   ) => {
     if (e.key === "Enter") {
       setLoading(true);
-      try {
-        if (documentTitle !== title) {
-          const updated = await updateDocument(roomId, documentTitle);
-          if (updated) setEditing(false);
+      if (documentTitle !== title) {
+        const result = await updateDocument(roomId, documentTitle);
+        if (result.success) {
+          setEditing(false);
+        } else {
+          console.error(`Failed to update title: ${result.error}`);
         }
-      } catch (error) {
-        console.error(`Failed to update title: ${error}`);
       }
       setLoading(false);
     }

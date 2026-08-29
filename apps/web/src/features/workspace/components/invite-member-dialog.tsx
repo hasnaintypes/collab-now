@@ -62,7 +62,9 @@ export default function InviteMemberDialog({
 
   useEffect(() => {
     if (open) {
-      getPendingInvites(workspaceId).then(setPendingInvites);
+      getPendingInvites(workspaceId).then((result) => {
+        setPendingInvites(result.success ? result.data : []);
+      });
     }
   }, [open, workspaceId]);
 
@@ -79,8 +81,8 @@ export default function InviteMemberDialog({
     }
 
     debounceRef.current = setTimeout(async () => {
-      const users = await searchUsers({ query: value, workspaceId });
-      setResults(users || []);
+      const result = await searchUsers({ query: value, workspaceId });
+      setResults(result.success ? result.data : []);
       setShowResults(true);
     }, 300);
   };
@@ -95,28 +97,23 @@ export default function InviteMemberDialog({
     setLoading(true);
     setMessage(null);
 
-    try {
-      const result = await inviteMember({
-        workspaceId,
-        email,
-        role,
-        invitedById,
-      });
+    const result = await inviteMember({
+      workspaceId,
+      email,
+      role,
+      invitedById,
+    });
 
-      if (result?.error) {
-        setMessage({ type: "error", text: result.error });
-      } else {
-        setMessage({ type: "success", text: `Invite sent to ${email}` });
-        setEmail("");
-        // Refresh pending invites
-        const invites = await getPendingInvites(workspaceId);
-        setPendingInvites(invites);
-      }
-    } catch {
-      setMessage({ type: "error", text: "Failed to send invite" });
-    } finally {
-      setLoading(false);
+    if (!result.success) {
+      setMessage({ type: "error", text: result.error });
+    } else {
+      setMessage({ type: "success", text: `Invite sent to ${email}` });
+      setEmail("");
+      // Refresh pending invites
+      const invites = await getPendingInvites(workspaceId);
+      if (invites.success) setPendingInvites(invites.data);
     }
+    setLoading(false);
   };
 
   return (

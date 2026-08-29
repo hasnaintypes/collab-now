@@ -16,8 +16,9 @@ export default async function DocumentPage({
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const room = await getDocument({ roomId: id, userId: user.email });
-  if (!room) redirect("/dashboard");
+  const result = await getDocument({ roomId: id, userId: user.email });
+  if (!result.success) redirect("/dashboard");
+  const room = result.data;
 
   const userIds = Object.keys(room.usersAccesses);
   const users = await getUsers({ userIds });

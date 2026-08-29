@@ -28,10 +28,24 @@ import {
 import { updateTag, unstable_cache } from "next/cache";
 import { parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  type ActionResult,
+  ActionError,
+  actionError,
+  safeAction,
+} from "@/lib/action-result";
 import { sendMail, inviteEmailHtml } from "@collabnow/email";
 import { activityTag, workspaceMembersTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
-import type { WorkspaceRole } from "../types";
+import type {
+  WorkspaceRole,
+  WorkspaceData,
+  WorkspaceMember,
+  WorkspaceSearchResult,
+  PendingInvite,
+  WorkspaceInvite,
+  AcceptInviteResult,
+} from "../types";
 import type { GetActivityOptions, PaginatedActivity } from "../../activity/types";
 
 const ACTIVITY_PAGE_SIZE = 20;
@@ -39,8 +53,8 @@ const ACTIVITY_PAGE_SIZE = 20;
 export const getOrCreateWorkspace = async (
   userId: string,
   userName: string
-) => {
-  try {
+): Promise<ActionResult<WorkspaceData>> =>
+  safeAction(async () => {
     // A user can belong to more than one workspace (their own auto-created one, plus
     // any they've joined via invite). Deterministically prefer the one they own, then
     // fall back to whichever membership is oldest, rather than an arbitrary DB row order.
@@ -100,11 +114,7 @@ export const getOrCreateWorkspace = async (
       role: "owner" as WorkspaceRole,
       memberCount: 1,
     });
-  } catch (error) {
-    console.error(`Failed to get or create workspace: ${error}`);
-    throw error;
-  }
-};
+  }, "Failed to load your workspace. Please try again.");
 
 async function fetchWorkspaceMembers(workspaceId: string) {
   const members = await db
@@ -123,18 +133,18 @@ async function fetchWorkspaceMembers(workspaceId: string) {
   return parseStringify(members);
 }
 
-export const getWorkspaceMembers = async (workspaceId: string) => {
-  try {
-    return await unstable_cache(
-      () => fetchWorkspaceMembers(workspaceId),
-      ["workspace-members", workspaceId],
-      { tags: [workspaceMembersTag(workspaceId)], revalidate: 60 }
-    )();
-  } catch (error) {
-    console.error(`Failed to get workspace members: ${error}`);
-    throw error;
-  }
-};
+export const getWorkspaceMembers = async (
+  workspaceId: string
+): Promise<ActionResult<WorkspaceMember[]>> =>
+  safeAction(
+    () =>
+      unstable_cache(
+        () => fetchWorkspaceMembers(workspaceId),
+        ["workspace-members", workspaceId],
+        { tags: [workspaceMembersTag(workspaceId)], revalidate: 60 }
+      )(),
+    "Failed to load workspace members. Please try again."
+  );
 
 export const searchUsers = async ({
   query,
@@ -142,8 +152,8 @@ export const searchUsers = async ({
 }: {
   query: string;
   workspaceId: string;
-}) => {
-  try {
+}): Promise<ActionResult<WorkspaceSearchResult[]>> =>
+  safeAction(async () => {
     // Get existing member user IDs to exclude
     const existingMembers = await db
       .select({ userId: workspaceMember.userId })
@@ -185,11 +195,7 @@ export const searchUsers = async ({
     }
 
     return parseStringify(results);
-  } catch (error) {
-    console.error(`Failed to search users: ${error}`);
-    throw error;
-  }
-};
+  }, "Failed to search users. Please try again.");
 
 export const inviteMember = async ({
   workspaceId,
@@ -201,26 +207,26 @@ export const inviteMember = async ({
   email: string;
   role: string;
   invitedById: string;
-}) => {
-  try {
-    // Re-derive identity server-side rather than trusting the caller-supplied
-    // `invitedById` (see docs/ROADMAP.md P0-6).
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session || session.user.id !== invitedById) {
-      return { error: "You must be signed in to invite members." };
-    }
+}): Promise<ActionResult<WorkspaceInvite>> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `invitedById` (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.id !== invitedById) {
+    return actionError("You must be signed in to invite members.");
+  }
 
-    const rateLimit = await checkRateLimit(
-      RATE_LIMITS.workspaceInvite,
-      session.user.id
+  const rateLimit = await checkRateLimit(
+    RATE_LIMITS.workspaceInvite,
+    session.user.id
+  );
+  if (!rateLimit.success) {
+    return actionError(
+      `You're sending invites too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+      rateLimit.retryAfterSeconds
     );
-    if (!rateLimit.success) {
-      return {
-        error: `You're sending invites too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
-        retryAfterSeconds: rateLimit.retryAfterSeconds,
-      };
-    }
+  }
 
+  return safeAction(async () => {
     // Check if user is already a member (by email)
     const existingUser = await db
       .select({ id: user.id })
@@ -241,7 +247,7 @@ export const inviteMember = async ({
         .limit(1);
 
       if (existingMember.length > 0) {
-        return { error: "User is already a member of this workspace" };
+        throw new ActionError("User is already a member of this workspace.");
       }
     }
 
@@ -259,7 +265,7 @@ export const inviteMember = async ({
       .limit(1);
 
     if (pendingInvite.length > 0) {
-      return { error: "An invite has already been sent to this email" };
+      throw new ActionError("An invite has already been sent to this email.");
     }
 
     // Create invite
@@ -316,14 +322,13 @@ export const inviteMember = async ({
     updateTag(activityTag(workspaceId));
 
     return parseStringify(invite);
-  } catch (error) {
-    console.error(`Failed to invite member: ${error}`);
-    throw error;
-  }
+  }, "Failed to send invite. Please try again.");
 };
 
-export const acceptInvite = async (token: string) => {
-  try {
+export const acceptInvite = async (
+  token: string
+): Promise<ActionResult<AcceptInviteResult>> =>
+  safeAction(async () => {
     const now = new Date();
 
     // Find the invite
@@ -340,7 +345,7 @@ export const acceptInvite = async (token: string) => {
       .limit(1);
 
     if (!invite) {
-      return { error: "Invite is invalid or has expired" };
+      throw new ActionError("Invite is invalid or has expired.");
     }
 
     // Find user by email
@@ -351,10 +356,7 @@ export const acceptInvite = async (token: string) => {
       .limit(1);
 
     if (!invitedUser) {
-      return {
-        needsSignUp: true,
-        email: invite.email,
-      };
+      return { outcome: "needsSignUp", email: invite.email };
     }
 
     // Check if already a member (edge case: joined via another path)
@@ -393,15 +395,13 @@ export const acceptInvite = async (token: string) => {
     updateTag(workspaceMembersTag(invite.workspaceId));
     updateTag(activityTag(invite.workspaceId));
 
-    return { success: true, workspaceId: invite.workspaceId };
-  } catch (error) {
-    console.error(`Failed to accept invite: ${error}`);
-    throw error;
-  }
-};
+    return { outcome: "joined", workspaceId: invite.workspaceId };
+  }, "Failed to accept invite. Please try again.");
 
-export const getPendingInvites = async (workspaceId: string) => {
-  try {
+export const getPendingInvites = async (
+  workspaceId: string
+): Promise<ActionResult<PendingInvite[]>> =>
+  safeAction(async () => {
     const invites = await db
       .select({
         id: workspaceInvite.id,
@@ -419,11 +419,7 @@ export const getPendingInvites = async (workspaceId: string) => {
       );
 
     return parseStringify(invites);
-  } catch (error) {
-    console.error(`Failed to get pending invites: ${error}`);
-    throw error;
-  }
-};
+  }, "Failed to load pending invites. Please try again.");
 
 async function fetchActivityPage(
   workspaceId: string,
@@ -480,18 +476,17 @@ async function fetchActivityPage(
 export const getRecentActivity = async (
   workspaceId: string,
   options: GetActivityOptions = {}
-): Promise<PaginatedActivity> => {
+): Promise<ActionResult<PaginatedActivity>> => {
   const cursor = options.cursor ?? null;
   const limit = options.limit ?? ACTIVITY_PAGE_SIZE;
 
-  try {
-    return await unstable_cache(
-      () => fetchActivityPage(workspaceId, cursor, limit),
-      ["recent-activity", workspaceId, String(limit), cursor ?? "-"],
-      { tags: [activityTag(workspaceId)], revalidate: 30 }
-    )();
-  } catch (error) {
-    console.error(`Failed to get recent activity: ${error}`);
-    return { activities: [], nextCursor: null };
-  }
+  return safeAction(
+    () =>
+      unstable_cache(
+        () => fetchActivityPage(workspaceId, cursor, limit),
+        ["recent-activity", workspaceId, String(limit), cursor ?? "-"],
+        { tags: [activityTag(workspaceId)], revalidate: 30 }
+      )(),
+    "Failed to load recent activity. Please try again."
+  );
 };

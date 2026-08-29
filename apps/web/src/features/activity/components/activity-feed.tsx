@@ -49,8 +49,9 @@ export default function ActivityFeed({
     if (!cursor || isLoadingMore) return;
     startTransition(async () => {
       const result = await getRecentActivity(workspaceId, { cursor });
-      setActivities((prev) => [...prev, ...result.activities]);
-      setCursor(result.nextCursor);
+      if (!result.success) return;
+      setActivities((prev) => [...prev, ...result.data.activities]);
+      setCursor(result.data.nextCursor);
     });
   };
 

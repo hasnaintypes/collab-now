@@ -32,33 +32,33 @@ export default async function AcceptInvitePage({
 
   const result = await acceptInvite(token);
 
-  if (result.success) {
-    redirect("/dashboard");
-  }
-
-  if (result.needsSignUp) {
-    redirect(
-      `/sign-up?redirect=${encodeURIComponent(`/invite/accept?token=${token}`)}`
+  if (!result.success) {
+    // Error state (expired / invalid)
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="max-w-md text-center">
+          <h1 className="mb-2 text-2xl font-bold tracking-tight">
+            Invite Expired
+          </h1>
+          <p className="mb-6 text-muted-foreground">
+            {result.error || "This invite is no longer valid."}
+          </p>
+          <Link
+            href="/dashboard"
+            className="rounded-sm bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
+      </div>
     );
   }
 
-  // Error state (expired / invalid)
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="max-w-md text-center">
-        <h1 className="mb-2 text-2xl font-bold tracking-tight">
-          Invite Expired
-        </h1>
-        <p className="mb-6 text-muted-foreground">
-          {result.error || "This invite is no longer valid."}
-        </p>
-        <Link
-          href="/dashboard"
-          className="rounded-sm bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground"
-        >
-          Go to Dashboard
-        </Link>
-      </div>
-    </div>
+  if (result.data.outcome === "joined") {
+    redirect("/dashboard");
+  }
+
+  redirect(
+    `/sign-up?redirect=${encodeURIComponent(`/invite/accept?token=${token}`)}`
   );
 }

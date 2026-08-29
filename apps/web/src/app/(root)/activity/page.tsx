@@ -18,8 +18,16 @@ export default async function ActivityPage() {
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const workspaceData = await getOrCreateWorkspace(user.id, user.name);
-  const { activities, nextCursor } = await getRecentActivity(workspaceData.id);
+  const workspaceResult = await getOrCreateWorkspace(user.id, user.name);
+  if (!workspaceResult.success) {
+    throw new Error(workspaceResult.error);
+  }
+  const workspaceData = workspaceResult.data;
+
+  const activityResult = await getRecentActivity(workspaceData.id);
+  const { activities, nextCursor } = activityResult.success
+    ? activityResult.data
+    : { activities: [], nextCursor: null };
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

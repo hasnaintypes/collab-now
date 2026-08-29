@@ -16,10 +16,14 @@ export default async function ProfilePage() {
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const [{ documents: recentDocuments }, docCount] = await Promise.all([
+  const [documentsResult, docCountResult] = await Promise.all([
     getDocumentsForUser(user.id, { filter: "recent", limit: 5 }),
     getDocumentCountForUser(user.id),
   ]);
+  const recentDocuments = documentsResult.success
+    ? documentsResult.data.documents
+    : [];
+  const docCount = docCountResult.success ? docCountResult.data : 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

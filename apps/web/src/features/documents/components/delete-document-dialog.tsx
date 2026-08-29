@@ -19,16 +19,21 @@ import type { DeleteModalProps } from "../types";
 export default function DeleteDocumentDialog({ roomId }: DeleteModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDelete = async () => {
     setLoading(true);
-    try {
-      await deleteDocument(roomId);
-      setOpen(false);
-    } catch (error) {
-      console.error("Error deleting document:", error);
-    }
+    setError(null);
+    // On success, `deleteDocument` redirects to `/dashboard` internally and
+    // this component unmounts before ever seeing a resolved value — the
+    // `setOpen(false)` below only matters if that ever changes.
+    const result = await deleteDocument(roomId);
     setLoading(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    setOpen(false);
   };
 
   return (
@@ -46,6 +51,7 @@ export default function DeleteDocumentDialog({ roomId }: DeleteModalProps) {
             undone.
           </DialogDescription>
         </DialogHeader>
+        {error && <p className="text-sm text-red-500">{error}</p>}
         <DialogFooter className="mt-4">
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>

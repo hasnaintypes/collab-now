@@ -7,6 +7,12 @@ import { liveblocks } from "@/lib/liveblocks";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
 import { getAccessType, parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
+import {
+  type ActionResult,
+  ActionError,
+  actionError,
+  safeAction,
+} from "@/lib/action-result";
 import { redirect } from "next/navigation";
 import {
   eq,
@@ -44,6 +50,21 @@ import type {
 const DOC_LIMIT = 50;
 const DOCUMENTS_PAGE_SIZE = 15;
 const RECENT_DOCUMENTS_LIMIT = 10;
+
+// The Liveblocks Node SDK types `metadata`/`usersAccesses` generically (it has
+// no way to know our app-specific shapes); this local alias documents what
+// every caller in this codebase actually assumes after `parseStringify`.
+// `usersAccesses` is intentionally `Record<string, string[]>` rather than the
+// ambient `RoomAccesses` (a union of two differently-shaped tuples) — every
+// read-side usage just checks `.includes("room:write")`, and a tuple *union*
+// makes that call type-check as `never` (TS narrows the parameter type to the
+// intersection of both tuples' element types, which is empty). `RoomAccesses`
+// stays as-is for the write side (`createRoom`/`updateRoom` calls below).
+type Room = {
+  id: string;
+  metadata: RoomMetadata;
+  usersAccesses: Record<string, string[]>;
+};
 
 // A document is "the user's" if they created it or were added as a collaborator.
 // Shared by the doc-limit check, the count widget, and the paginated list query so
@@ -94,19 +115,13 @@ export const createDocument = async ({
   userId,
   email,
   workspaceId,
-}: CreateDocumentParams): Promise<
-  | { success: true; room: Awaited<ReturnType<typeof liveblocks.createRoom>> }
-  | { success: false; error: string; retryAfterSeconds?: number }
-> => {
+}: CreateDocumentParams): Promise<ActionResult<Room>> => {
   // Re-derive identity server-side rather than trusting the caller-supplied
   // `userId` — this is a server action, a spoofable trust boundary otherwise
   // (see docs/ROADMAP.md P0-6).
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session || session.user.id !== userId) {
-    return {
-      success: false,
-      error: "You must be signed in to create a document.",
-    };
+    return actionError("You must be signed in to create a document.");
   }
 
   const rateLimit = await checkRateLimit(
@@ -114,22 +129,20 @@ export const createDocument = async ({
     session.user.id
   );
   if (!rateLimit.success) {
-    return {
-      success: false,
-      error: `You're creating documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
-      retryAfterSeconds: rateLimit.retryAfterSeconds,
-    };
+    return actionError(
+      `You're creating documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+      rateLimit.retryAfterSeconds
+    );
   }
 
-  try {
+  return safeAction(async () => {
     // Enforce 50-document limit (documents the user created or was added to as a collaborator)
     const existingCount = await countUserDocuments(userId);
 
     if (existingCount >= DOC_LIMIT) {
-      return {
-        success: false,
-        error: `Document limit reached. You can have up to ${DOC_LIMIT} documents.`,
-      };
+      throw new ActionError(
+        `Document limit reached. You can have up to ${DOC_LIMIT} documents.`
+      );
     }
 
     const roomId = nanoid();
@@ -171,11 +184,8 @@ export const createDocument = async ({
 
     invalidateDocumentsCache([userId]);
     revalidatePath("/dashboard");
-    return { success: true, room: parseStringify(room) };
-  } catch (error) {
-    console.error(`Failed to create document: ${error}`);
-    throw error;
-  }
+    return parseStringify(room);
+  }, "Failed to create the document. Please try again.");
 };
 
 export const getDocument = async ({
@@ -184,20 +194,17 @@ export const getDocument = async ({
 }: {
   roomId: string;
   userId: string;
-}) => {
-  try {
+}): Promise<ActionResult<Room>> =>
+  safeAction(async () => {
     const room = await liveblocks.getRoom(roomId);
     const hasAccess = Object.keys(room.usersAccesses).includes(userId);
 
     if (!hasAccess) {
-      throw new Error("You do not have access to this document");
+      throw new ActionError("You do not have access to this document.");
     }
 
     return parseStringify(room);
-  } catch (error) {
-    console.error(`Error getting room: ${error}`);
-  }
-};
+  }, "Failed to load the document. Please try again.");
 
 // Runs the actual query for one page of a user's document list. Split out from
 // `getDocumentsForUser` so the `unstable_cache` wrapper only ever sees
@@ -318,52 +325,51 @@ async function fetchDocumentsPage({
 export const getDocumentsForUser = async (
   userId: string,
   options: GetDocumentsForUserOptions = {}
-): Promise<PaginatedDocuments> => {
+): Promise<ActionResult<PaginatedDocuments>> => {
   const filter = options.filter ?? "all";
   const search = options.search?.trim() || undefined;
   const cursor = options.cursor ?? null;
   const limit =
     options.limit ?? (filter === "recent" ? RECENT_DOCUMENTS_LIMIT : DOCUMENTS_PAGE_SIZE);
 
-  try {
-    return await unstable_cache(
-      () => fetchDocumentsPage({ userId, filter, cursor, limit, search }),
-      ["documents-for-user", userId, filter, String(limit), cursor ?? "-", search ?? "-"],
-      { tags: [documentsTag(userId)], revalidate: 60 }
-    )();
-  } catch (error) {
-    console.error(`Error getting documents: ${error}`);
-    return { documents: [], nextCursor: null };
-  }
+  return safeAction(
+    () =>
+      unstable_cache(
+        () => fetchDocumentsPage({ userId, filter, cursor, limit, search }),
+        ["documents-for-user", userId, filter, String(limit), cursor ?? "-", search ?? "-"],
+        { tags: [documentsTag(userId)], revalidate: 60 }
+      )(),
+    "Failed to load documents. Please try again."
+  );
 };
 
 // Lightweight total (not filtered/paginated) used for the "X / 50 documents"
 // display — kept separate from `countUserDocuments` so this one can be cached
 // without affecting the doc-limit check's correctness.
-export const getDocumentCountForUser = async (userId: string): Promise<number> => {
-  try {
-    return await unstable_cache(
-      () => countUserDocuments(userId),
-      ["documents-count-for-user", userId],
-      { tags: [documentsTag(userId)], revalidate: 60 }
-    )();
-  } catch (error) {
-    console.error(`Error counting documents: ${error}`);
-    return 0;
-  }
-};
+export const getDocumentCountForUser = async (
+  userId: string
+): Promise<ActionResult<number>> =>
+  safeAction(
+    () =>
+      unstable_cache(
+        () => countUserDocuments(userId),
+        ["documents-count-for-user", userId],
+        { tags: [documentsTag(userId)], revalidate: 60 }
+      )(),
+    "Failed to load your document count."
+  );
 
-export const updateDocument = async (roomId: string, title: string) => {
-  try {
+export const updateDocument = async (
+  roomId: string,
+  title: string
+): Promise<ActionResult<Room>> =>
+  safeAction(async () => {
     const updatedRoom = await liveblocks.updateRoom(roomId, {
       metadata: { title },
     });
     revalidatePath(`/documents/${roomId}`);
     return parseStringify(updatedRoom);
-  } catch (error) {
-    console.error(`Failed to update title: ${error}`);
-  }
-};
+  }, "Failed to update the title. Please try again.");
 
 // Mirrors a Liveblocks access grant into `documentCollaborator` so the dashboard can
 // list shared documents from Postgres without querying Liveblocks. No-ops for emails
@@ -457,32 +463,32 @@ export const updateDocumentAccess = async ({
   email,
   userType,
   updatedBy,
-}: ShareDocumentParams): Promise<{ error?: string; retryAfterSeconds?: number }> => {
-  try {
-    // Re-derive identity server-side rather than trusting the caller-supplied
-    // `updatedBy` (see docs/ROADMAP.md P0-6).
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session || session.user.email !== updatedBy.email) {
-      return { error: "You must be signed in to share this document." };
-    }
+}: ShareDocumentParams): Promise<ActionResult<null>> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `updatedBy` (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.email !== updatedBy.email) {
+    return actionError("You must be signed in to share this document.");
+  }
 
-    const rateLimit = await checkRateLimit(
-      RATE_LIMITS.documentShare,
-      session.user.id
+  const rateLimit = await checkRateLimit(
+    RATE_LIMITS.documentShare,
+    session.user.id
+  );
+  if (!rateLimit.success) {
+    return actionError(
+      `You're sharing documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+      rateLimit.retryAfterSeconds
     );
-    if (!rateLimit.success) {
-      return {
-        error: `You're sharing documents too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
-        retryAfterSeconds: rateLimit.retryAfterSeconds,
-      };
-    }
+  }
 
+  return safeAction(async () => {
     const [doc] = await db
       .select({ workspaceId: document.workspaceId })
       .from(document)
       .where(eq(document.roomId, roomId))
       .limit(1);
-    if (!doc) return { error: "Document not found." };
+    if (!doc) throw new ActionError("Document not found.");
 
     const [targetUser] = await db
       .select({ id: user.id })
@@ -490,9 +496,9 @@ export const updateDocumentAccess = async ({
       .where(eq(user.email, email))
       .limit(1);
     if (!targetUser) {
-      return {
-        error: `${email} needs a Collab Now account before they can be added.`,
-      };
+      throw new ActionError(
+        `${email} needs a Collab Now account before they can be added.`
+      );
     }
 
     const [membership] = await db
@@ -506,9 +512,9 @@ export const updateDocumentAccess = async ({
       )
       .limit(1);
     if (!membership) {
-      return {
-        error: `${email} isn't a member of this workspace yet. Invite them to the workspace first.`,
-      };
+      throw new ActionError(
+        `${email} isn't a member of this workspace yet. Invite them to the workspace first.`
+      );
     }
 
     const usersAccesses: RoomAccesses = {
@@ -560,11 +566,8 @@ export const updateDocumentAccess = async ({
     invalidateDocumentsCache([targetUser.id]);
     revalidatePath(`/documents/${roomId}`);
     revalidatePath("/dashboard");
-    return {};
-  } catch (error) {
-    console.error(`Error updating document access: ${error}`);
-    return { error: "Something went wrong while updating access. Please try again." };
-  }
+    return null;
+  }, "Something went wrong while updating access. Please try again.");
 };
 
 export const removeCollaborator = async ({
@@ -573,12 +576,12 @@ export const removeCollaborator = async ({
 }: {
   roomId: string;
   email: string;
-}) => {
-  try {
+}): Promise<ActionResult<Room>> =>
+  safeAction(async () => {
     const room = await liveblocks.getRoom(roomId);
 
     if (room.metadata.email === email) {
-      throw new Error("You cannot remove yourself from the document");
+      throw new ActionError("You cannot remove yourself from the document.");
     }
 
     const updatedRoom = await liveblocks.updateRoom(roomId, {
@@ -591,13 +594,12 @@ export const removeCollaborator = async ({
     revalidatePath(`/documents/${roomId}`);
     revalidatePath("/dashboard");
     return parseStringify(updatedRoom);
-  } catch (error) {
-    console.error(`Error removing collaborator: ${error}`);
-  }
-};
+  }, "Failed to remove collaborator. Please try again.");
 
-export const getDocumentCollaborators = async (roomId: string) => {
-  try {
+export const getDocumentCollaborators = async (
+  roomId: string
+): Promise<ActionResult<User[]>> =>
+  safeAction(async () => {
     const room = await liveblocks.getRoom(roomId);
     const userIds = Object.keys(room.usersAccesses);
 
@@ -612,14 +614,12 @@ export const getDocumentCollaborators = async (roomId: string) => {
           : "viewer",
       }))
     );
-  } catch (error) {
-    console.error(`Error getting document collaborators: ${error}`);
-    return [];
-  }
-};
+  }, "Failed to load collaborators. Please try again.");
 
-export const deleteDocument = async (roomId: string) => {
-  try {
+export const deleteDocument = async (
+  roomId: string
+): Promise<ActionResult<null>> => {
+  const result = await safeAction(async () => {
     // Look up document (and its collaborators, before the cascade delete removes
     // them) for activity logging and cache invalidation.
     const [doc] = await db
@@ -651,26 +651,33 @@ export const deleteDocument = async (roomId: string) => {
       invalidateDocumentsCache(stakeholderIds);
       updateTag(activityTag(doc.workspaceId));
     }
-  } catch (error) {
-    console.error(`Error deleting document: ${error}`);
-    throw error;
-  }
 
+    return null;
+  }, "Failed to delete the document. Please try again.");
+
+  if (!result.success) return result;
+
+  // `redirect` deliberately sits outside `safeAction` — it throws a special
+  // Next.js control-flow error that must propagate to the framework, not be
+  // caught and turned into an `ActionResult` failure.
   revalidatePath("/dashboard");
   redirect("/dashboard");
 };
 
 // ── Starring ──────────────────────────────────────────────────
 
-export const toggleStarDocument = async (roomId: string, userId: string) => {
-  try {
+export const toggleStarDocument = async (
+  roomId: string,
+  userId: string
+): Promise<ActionResult<{ starred: boolean }>> =>
+  safeAction(async () => {
     const [doc] = await db
       .select({ id: document.id, workspaceId: document.workspaceId })
       .from(document)
       .where(eq(document.roomId, roomId))
       .limit(1);
 
-    if (!doc) throw new Error("Document not found");
+    if (!doc) throw new ActionError("Document not found.");
 
     const [existing] = await db
       .select({ id: documentStar.id })
@@ -696,16 +703,15 @@ export const toggleStarDocument = async (roomId: string, userId: string) => {
     invalidateDocumentsCache([userId]);
     revalidatePath("/dashboard");
     return { starred: !existing };
-  } catch (error) {
-    console.error(`Error toggling star: ${error}`);
-    throw error;
-  }
-};
+  }, "Failed to update star. Please try again.");
 
 // ── Archiving ─────────────────────────────────────────────────
 
-export const toggleArchiveDocument = async (roomId: string, userId: string) => {
-  try {
+export const toggleArchiveDocument = async (
+  roomId: string,
+  userId: string
+): Promise<ActionResult<{ archived: boolean }>> =>
+  safeAction(async () => {
     const [doc] = await db
       .select({
         id: document.id,
@@ -717,7 +723,7 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
       .where(eq(document.roomId, roomId))
       .limit(1);
 
-    if (!doc) throw new Error("Document not found");
+    if (!doc) throw new ActionError("Document not found.");
 
     const newValue = !doc.isArchived;
     await db
@@ -739,8 +745,4 @@ export const toggleArchiveDocument = async (roomId: string, userId: string) => {
     updateTag(activityTag(doc.workspaceId));
     revalidatePath("/dashboard");
     return { archived: newValue };
-  } catch (error) {
-    console.error(`Error toggling archive: ${error}`);
-    throw error;
-  }
-};
+  }, "Failed to update archive status. Please try again.");

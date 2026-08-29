@@ -15,7 +15,11 @@ export default async function SettingsPage() {
   if (!session) redirect("/sign-in");
   const user = session.user;
 
-  const workspaceData = await getOrCreateWorkspace(user.id, user.name);
+  const workspaceResult = await getOrCreateWorkspace(user.id, user.name);
+  if (!workspaceResult.success) {
+    throw new Error(workspaceResult.error);
+  }
+  const workspaceData = workspaceResult.data;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
