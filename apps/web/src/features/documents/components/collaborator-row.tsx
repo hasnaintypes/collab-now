@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import UserTypeSelect from "./user-type-select";
 import {
   removeCollaborator,
@@ -47,13 +48,7 @@ export default function CollaboratorRow({
     }
   };
 
-  const handleRemove = async () => {
-    setLoading(true);
-    setError(null);
-    const result = await removeCollaborator({ roomId, email });
-    setLoading(false);
-    if (!result.success) setError(result.error);
-  };
+  const handleRemove = () => removeCollaborator({ roomId, email });
 
   return (
     <li className="flex items-center justify-between gap-2 py-3">
@@ -96,14 +91,22 @@ export default function CollaboratorRow({
             setUserType={setUserType || "viewer"}
             onClickHandler={handleTypeChange}
           />
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleRemove}
-            className="text-destructive hover:text-destructive"
-          >
-            Remove
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-destructive hover:text-destructive"
+              >
+                Remove
+              </Button>
+            }
+            title="Remove collaborator"
+            description={`Remove ${collaborator.name} from this document? They'll immediately lose access and will need to be re-invited to regain it.`}
+            confirmLabel="Remove"
+            loadingLabel="Removing..."
+            onConfirm={handleRemove}
+          />
         </div>
       )}
     </li>

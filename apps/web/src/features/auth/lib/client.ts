@@ -6,6 +6,7 @@ export const {
   signOut,
   useSession,
   updateUser,
+  deleteUser,
   sendVerificationEmail,
   requestPasswordReset,
   resetPassword,

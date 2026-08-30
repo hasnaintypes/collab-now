@@ -421,6 +421,200 @@ export const getPendingInvites = async (
     return parseStringify(invites);
   }, "Failed to load pending invites. Please try again.");
 
+export const revokeInvite = async ({
+  inviteId,
+  workspaceId,
+  revokedById,
+}: {
+  inviteId: string;
+  workspaceId: string;
+  revokedById: string;
+}): Promise<ActionResult<null>> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `revokedById` (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.id !== revokedById) {
+    return actionError("You must be signed in to revoke invites.");
+  }
+
+  return safeAction(async () => {
+    const [actor] = await db
+      .select({ role: workspaceMember.role })
+      .from(workspaceMember)
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, workspaceId),
+          eq(workspaceMember.userId, revokedById)
+        )
+      )
+      .limit(1);
+    if (!actor || (actor.role !== "owner" && actor.role !== "admin")) {
+      throw new ActionError("You don't have permission to revoke invites.");
+    }
+
+    const [invite] = await db
+      .select({
+        id: workspaceInvite.id,
+        email: workspaceInvite.email,
+        status: workspaceInvite.status,
+      })
+      .from(workspaceInvite)
+      .where(
+        and(
+          eq(workspaceInvite.id, inviteId),
+          eq(workspaceInvite.workspaceId, workspaceId)
+        )
+      )
+      .limit(1);
+    if (!invite) throw new ActionError("Invite not found.");
+    if (invite.status !== "pending") {
+      throw new ActionError("This invite is no longer pending.");
+    }
+
+    await db
+      .delete(workspaceInvite)
+      .where(eq(workspaceInvite.id, inviteId));
+
+    await db.insert(activityLog).values({
+      workspaceId,
+      userId: revokedById,
+      action: "invite_revoked",
+      metadata: JSON.stringify({ email: invite.email }),
+    });
+
+    updateTag(activityTag(workspaceId));
+
+    return null;
+  }, "Failed to revoke invite. Please try again.");
+};
+
+export const removeMember = async ({
+  workspaceId,
+  memberUserId,
+  removedById,
+}: {
+  workspaceId: string;
+  memberUserId: string;
+  removedById: string;
+}): Promise<ActionResult<null>> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `removedById` (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.id !== removedById) {
+    return actionError("You must be signed in to remove members.");
+  }
+
+  return safeAction(async () => {
+    if (memberUserId === removedById) {
+      throw new ActionError(
+        'Use "Leave workspace" to remove yourself.'
+      );
+    }
+
+    const [actor] = await db
+      .select({ role: workspaceMember.role })
+      .from(workspaceMember)
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, workspaceId),
+          eq(workspaceMember.userId, removedById)
+        )
+      )
+      .limit(1);
+    if (!actor || (actor.role !== "owner" && actor.role !== "admin")) {
+      throw new ActionError("You don't have permission to remove members.");
+    }
+
+    const [target] = await db
+      .select({
+        id: workspaceMember.id,
+        role: workspaceMember.role,
+        email: user.email,
+      })
+      .from(workspaceMember)
+      .innerJoin(user, eq(workspaceMember.userId, user.id))
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, workspaceId),
+          eq(workspaceMember.userId, memberUserId)
+        )
+      )
+      .limit(1);
+    if (!target) throw new ActionError("Member not found.");
+    if (target.role === "owner") {
+      throw new ActionError("The workspace owner can't be removed.");
+    }
+    if (target.role === "admin" && actor.role !== "owner") {
+      throw new ActionError("Only the workspace owner can remove an admin.");
+    }
+
+    await db.delete(workspaceMember).where(eq(workspaceMember.id, target.id));
+
+    await db.insert(activityLog).values({
+      workspaceId,
+      userId: removedById,
+      action: "member_removed",
+      metadata: JSON.stringify({ email: target.email }),
+    });
+
+    updateTag(workspaceMembersTag(workspaceId));
+    updateTag(activityTag(workspaceId));
+
+    return null;
+  }, "Failed to remove member. Please try again.");
+};
+
+export const leaveWorkspace = async ({
+  workspaceId,
+  userId,
+}: {
+  workspaceId: string;
+  userId: string;
+}): Promise<ActionResult<null>> => {
+  // Re-derive identity server-side rather than trusting the caller-supplied
+  // `userId` (see docs/ROADMAP.md P0-6).
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session || session.user.id !== userId) {
+    return actionError("You must be signed in to leave a workspace.");
+  }
+
+  return safeAction(async () => {
+    const [membership] = await db
+      .select({ id: workspaceMember.id, role: workspaceMember.role })
+      .from(workspaceMember)
+      .where(
+        and(
+          eq(workspaceMember.workspaceId, workspaceId),
+          eq(workspaceMember.userId, userId)
+        )
+      )
+      .limit(1);
+    if (!membership) {
+      throw new ActionError("You're not a member of this workspace.");
+    }
+    if (membership.role === "owner") {
+      throw new ActionError(
+        "Workspace owners can't leave. Transfer ownership or delete the workspace instead."
+      );
+    }
+
+    await db
+      .delete(workspaceMember)
+      .where(eq(workspaceMember.id, membership.id));
+
+    await db.insert(activityLog).values({
+      workspaceId,
+      userId,
+      action: "left_workspace",
+    });
+
+    updateTag(workspaceMembersTag(workspaceId));
+    updateTag(activityTag(workspaceId));
+
+    return null;
+  }, "Failed to leave the workspace. Please try again.");
+};
+
 async function fetchActivityPage(
   workspaceId: string,
   cursor: string | null,

@@ -3,7 +3,10 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { auth } from "@/features/auth/lib";
-import { getOrCreateWorkspace } from "@/features/workspace/actions/workspace.actions";
+import {
+  getOrCreateWorkspace,
+  getWorkspaceMembers,
+} from "@/features/workspace/actions/workspace.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
@@ -20,6 +23,11 @@ export default async function SettingsPage() {
     throw new Error(workspaceResult.error);
   }
   const workspaceData = workspaceResult.data;
+
+  // Member list failures degrade to an empty list rather than failing the
+  // whole page — the rest of Settings is still useful without it.
+  const membersResult = await getWorkspaceMembers(workspaceData.id);
+  const members = membersResult.success ? membersResult.data : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -55,6 +63,7 @@ export default async function SettingsPage() {
 
         <SettingsContent
           user={{
+            id: user.id,
             name: user.name,
             email: user.email,
             image: user.image || "",
@@ -66,6 +75,7 @@ export default async function SettingsPage() {
             role: workspaceData.role,
             memberCount: workspaceData.memberCount,
           }}
+          members={members}
         />
       </main>
     </div>

@@ -6,6 +6,9 @@ import {
   Trash2,
   UserPlus,
   UserCheck,
+  UserMinus,
+  UserX,
+  LogOut,
   Share2,
   Archive,
   ArchiveRestore,
@@ -30,6 +33,9 @@ const actionConfig: Record<
   unarchived: { icon: ArchiveRestore, label: "unarchived a document", color: "text-amber-500" },
   starred: { icon: Star, label: "starred a document", color: "text-yellow-500" },
   unstarred: { icon: Star, label: "unstarred a document", color: "text-muted-foreground" },
+  invite_revoked: { icon: UserX, label: "revoked an invite", color: "text-red-500" },
+  member_removed: { icon: UserMinus, label: "removed a member", color: "text-red-500" },
+  left_workspace: { icon: LogOut, label: "left the workspace", color: "text-muted-foreground" },
 };
 
 export default function ActivityFeed({

@@ -15,9 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ThemeSwitch } from "@/components/theme-switch";
 import { dateConverter } from "@/lib/utils";
+import WorkspaceMembersList from "@/features/workspace/components/workspace-members-list";
+import LeaveWorkspaceButton from "@/features/workspace/components/leave-workspace-button";
+import DeleteAccountSection from "./delete-account-section";
+import type { WorkspaceMember, WorkspaceRole } from "@/features/workspace/types";
 
 type SettingsContentProps = {
   user: {
+    id: string;
     name: string;
     email: string;
     image: string;
@@ -29,6 +34,7 @@ type SettingsContentProps = {
     role: string;
     memberCount: number;
   };
+  members: WorkspaceMember[];
 };
 
 function SectionHeader({
@@ -75,6 +81,7 @@ function SettingRow({
 export default function SettingsContent({
   user,
   workspace,
+  members,
 }: SettingsContentProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -219,6 +226,24 @@ export default function SettingsContent({
             </SettingRow>
           </div>
         </div>
+
+        {/* Member list — visible to everyone, but remove actions are only
+            rendered (and only server-permitted) for owners/admins. */}
+        {members.length > 0 && (
+          <div className="mt-6 rounded-sm bg-muted/40">
+            <div className="px-6 pt-5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Members
+              </h3>
+            </div>
+            <WorkspaceMembersList
+              members={members}
+              workspaceId={workspace.id}
+              currentUserId={user.id}
+              currentUserRole={workspace.role as WorkspaceRole}
+            />
+          </div>
+        )}
       </section>
 
       {/* Quick Links */}
@@ -268,19 +293,27 @@ export default function SettingsContent({
         <h2 className="mb-6 text-sm font-bold uppercase tracking-[0.2em] text-destructive/70">
           Danger Zone
         </h2>
-        <div className="rounded-sm border border-destructive/20 bg-destructive/5">
-          <div className="flex items-center justify-between px-6 py-5">
-            <div>
-              <p className="text-sm font-medium">Delete account</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Permanently delete your account and all associated data. This
-                action cannot be undone.
-              </p>
+        <div className="divide-y divide-destructive/20 rounded-sm border border-destructive/20 bg-destructive/5">
+          {/* Workspace owners can't leave their own workspace — there's no
+              ownership-transfer feature yet, so the only way out would be
+              deleting the whole workspace, which also isn't built. */}
+          {workspace.role !== "owner" && (
+            <div className="flex items-center justify-between px-6 py-5">
+              <div>
+                <p className="text-sm font-medium">Leave workspace</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Remove yourself from &ldquo;{workspace.name}&rdquo;. You can
+                  only rejoin if someone invites you back.
+                </p>
+              </div>
+              <LeaveWorkspaceButton
+                workspaceId={workspace.id}
+                workspaceName={workspace.name}
+                userId={user.id}
+              />
             </div>
-            <Button variant="destructive" size="sm" disabled>
-              Delete
-            </Button>
-          </div>
+          )}
+          <DeleteAccountSection />
         </div>
       </section>
     </div>

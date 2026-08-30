@@ -20,11 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { UserPlus, Mail, Clock } from "lucide-react";
+import { UserPlus, Mail, Clock, X } from "lucide-react";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import {
   searchUsers,
   inviteMember,
   getPendingInvites,
+  revokeInvite,
 } from "../actions/workspace.actions";
 import { dateConverter } from "@/lib/utils";
 import type { InviteMemberDialogProps } from "../types";
@@ -114,6 +116,18 @@ export default function InviteMemberDialog({
       if (invites.success) setPendingInvites(invites.data);
     }
     setLoading(false);
+  };
+
+  const handleRevoke = async (inviteId: string) => {
+    const result = await revokeInvite({
+      inviteId,
+      workspaceId,
+      revokedById: invitedById,
+    });
+    if (result.success) {
+      setPendingInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    }
+    return result;
   };
 
   return (
@@ -212,18 +226,36 @@ export default function InviteMemberDialog({
                 {pendingInvites.map((invite) => (
                   <li
                     key={invite.id}
-                    className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm"
                   >
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-3.5 text-muted-foreground" />
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Clock className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{invite.email}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">
                         {dateConverter(invite.createdAt)}
                       </span>
                     </div>
-                    <span className="text-xs capitalize text-muted-foreground">
-                      {invite.role}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs capitalize text-muted-foreground">
+                        {invite.role}
+                      </span>
+                      <ConfirmDialog
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            title="Revoke invite"
+                          >
+                            <X className="size-3.5 text-muted-foreground" />
+                          </Button>
+                        }
+                        title="Revoke invite"
+                        description={`Revoke the pending invite to ${invite.email}? They'll no longer be able to join using that invite link.`}
+                        confirmLabel="Revoke"
+                        loadingLabel="Revoking..."
+                        onConfirm={() => handleRevoke(invite.id)}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
