@@ -2,12 +2,7 @@ import Link from "next/link";
 import { FileText, Users, MessageSquare, ArrowLeft } from "lucide-react";
 import { dateConverter } from "@/lib/utils";
 import ProfileForm from "./profile-form";
-
-type RecentDoc = {
-  id: string;
-  metadata: { title: string };
-  createdAt: string;
-};
+import type { RoomDocument } from "@/features/documents/types";
 
 export default function ProfileContent({
   user,
@@ -22,7 +17,7 @@ export default function ProfileContent({
     emailVerified: boolean;
   };
   docCount: number;
-  recentDocuments: RecentDoc[];
+  recentDocuments: RoomDocument[];
 }) {
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 pt-10 md:px-8">

@@ -21,15 +21,7 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-export default function UserButton({
-  name,
-  email,
-  avatar,
-}: {
-  name: string;
-  email: string;
-  avatar: string;
-}) {
+export default function UserButton({ name, email, avatar }: MinimalUser) {
   const router = useRouter();
 
   const handleSignOut = async () => {

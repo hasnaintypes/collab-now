@@ -29,21 +29,11 @@ import {
   revokeInvite,
 } from "../actions/workspace.actions";
 import { dateConverter } from "@/lib/utils";
-import type { InviteMemberDialogProps } from "../types";
-
-type SearchResult = {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-};
-
-type PendingInvite = {
-  id: string;
-  email: string;
-  role: string;
-  createdAt: string;
-};
+import type {
+  InviteMemberDialogProps,
+  PendingInvite,
+  WorkspaceSearchResult,
+} from "../types";
 
 export default function InviteMemberDialog({
   workspaceId,
@@ -57,7 +47,7 @@ export default function InviteMemberDialog({
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<WorkspaceSearchResult[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +79,7 @@ export default function InviteMemberDialog({
     }, 300);
   };
 
-  const selectUser = (u: SearchResult) => {
+  const selectUser = (u: WorkspaceSearchResult) => {
     setEmail(u.email);
     setShowResults(false);
   };

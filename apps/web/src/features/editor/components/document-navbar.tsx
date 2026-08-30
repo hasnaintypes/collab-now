@@ -21,7 +21,7 @@ export default function DocumentNavbar({
   roomMetadata: RoomMetadata;
   users: User[];
   currentUserType: UserType;
-  currentUser: { name: string; email: string; avatar: string };
+  currentUser: MinimalUser;
   exportRef: React.MutableRefObject<ExportFunctions | null>;
 }) {
   return (

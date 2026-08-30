@@ -44,7 +44,7 @@ export default function DocumentsSection({
   email: string;
   workspaceId: string;
   activeFilter: DocumentFilter;
-  currentUser: { name: string; email: string; avatar: string };
+  currentUser: MinimalUser;
 }) {
   // `activeFilter` is passed as this component's React `key` from the parent
   // (switching filter tabs is a new server render), so a fresh mount — and

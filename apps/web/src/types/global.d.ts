@@ -18,6 +18,12 @@ declare type User = {
   userType?: UserType;
 };
 
+// The `{name, email, avatar}` subset of `User` used wherever a component only
+// needs enough identity to render/attribute something (a share dialog's
+// "shared by", a document navbar's account menu, etc.) and isn't handed a
+// full `User` (which additionally requires `id`/`color`).
+declare type MinimalUser = Pick<User, "name" | "email" | "avatar">;
+
 declare type RoomMetadata = {
   creatorId: string;
   email: string;

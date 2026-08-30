@@ -28,7 +28,7 @@ export default function DashboardShareDialog({
 }: {
   roomId: string;
   creatorId: string;
-  currentUser: { name: string; email: string; avatar: string };
+  currentUser: MinimalUser;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
