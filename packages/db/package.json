@@ -13,7 +13,8 @@
     "db:migrate": "dotenv -e ../../apps/web/.env -- drizzle-kit migrate",
     "db:push": "dotenv -e ../../apps/web/.env -- drizzle-kit push",
     "db:studio": "dotenv -e ../../apps/web/.env -- drizzle-kit studio",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -24,6 +25,7 @@
     "@collabnow/typescript-config": "workspace:*",
     "dotenv-cli": "^8.0.0",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

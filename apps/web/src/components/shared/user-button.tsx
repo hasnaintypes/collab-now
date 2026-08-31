@@ -31,7 +31,10 @@ export default function UserButton({ name, email, avatar }: MinimalUser) {
 
   return (
     <Popover>
-      <PopoverTrigger className="flex size-9 items-center justify-center rounded-full outline-none transition-opacity hover:opacity-80">
+      <PopoverTrigger
+        data-testid="user-menu-trigger"
+        className="flex size-9 items-center justify-center rounded-full outline-none transition-opacity hover:opacity-80"
+      >
         {avatar ? (
           <Image
             src={avatar}
@@ -78,6 +81,7 @@ export default function UserButton({ name, email, avatar }: MinimalUser) {
           Profile
         </Link>
         <button
+          data-testid="sign-out-button"
           onClick={handleSignOut}
           className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-destructive transition-colors hover:bg-muted"
         >

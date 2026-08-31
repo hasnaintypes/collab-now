@@ -9,6 +9,8 @@
     "start": "turbo run start --filter=web",
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e --filter=web",
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "db:push": "turbo run db:push",

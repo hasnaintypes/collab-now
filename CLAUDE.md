@@ -20,14 +20,20 @@ pnpm dev:all           # also starts apps/extension dev server
 pnpm build
 pnpm lint
 pnpm check-types
+pnpm test              # Vitest unit/integration tests, fanned out to @collabnow/db + web
+pnpm test:e2e          # Playwright smoke test (apps/web only) — needs apps/web/.env populated
 pnpm db:generate       # generate Drizzle migrations
 pnpm db:migrate
 pnpm db:studio
 ```
 
-To target a single workspace: `pnpm --filter web run build` (or `--filter @collabnow/db`, etc.).
+To target a single workspace: `pnpm --filter web run build` (or `--filter @collabnow/db`, etc.). Same for tests: `pnpm --filter @collabnow/db run test` or `pnpm --filter web run test`.
 
-There is currently **no test suite and no CI** configured in this repo (tracked as P0-11/P0-12 in `docs/ROADMAP.md`) — don't assume `pnpm test` exists.
+**Testing (P0-11):** Vitest covers `packages/db`'s schema invariants (cascade rules, uniqueness — introspected via Drizzle's `getTableConfig`, no live DB needed) and `apps/web/src/features/*/actions`' server actions (mocking `@collabnow/db`, `next/cache`, `next/headers`, and `@/features/auth/lib` rather than hitting a real database), plus the pure helpers in `apps/web/src/lib`. Not every action has a test — the goal was establishing the harness and pattern, not exhaustive coverage; follow the existing `*.test.ts` files' mocking style (see `room.actions.test.ts` and `workspace.actions.test.ts`) when adding more.
+
+Playwright (`apps/web/playwright.config.ts` + `apps/web/e2e/`) runs one smoke flow: sign in → create a document → edit it → sign out, against a real dev server (`pnpm dev`, auto-started unless `E2E_BASE_URL` is set) and a real Postgres/Liveblocks backend from `apps/web/.env` — there's no mocking at this layer, so it needs valid credentials the same way `pnpm dev` does. `apps/web/e2e/global-setup.ts` seeds one verified test user directly into Postgres (email/password from `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, defaulting to `e2e@collabnow.test`) using Better Auth's own `hashPassword` — this sidesteps clicking a real verification-email link, it isn't a security bypass in the app itself. The seed is idempotent and persists across runs; nothing currently tears it down.
+
+There is currently **no CI** configured in this repo (tracked as P0-12 in `docs/ROADMAP.md`) — tests only run when invoked locally for now.
 
 ## Architecture
 

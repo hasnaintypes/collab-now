@@ -119,6 +119,8 @@ Run from the repo root — Turborepo fans these out to the right workspace(s):
 | `pnpm build` | Production build (all apps) |
 | `pnpm lint` | Run ESLint across the workspace |
 | `pnpm check-types` | Type-check across the workspace |
+| `pnpm test` | Run Vitest unit/integration tests (`@collabnow/db` + `web`) |
+| `pnpm test:e2e` | Run the Playwright smoke test (`web` only; needs `apps/web/.env`) |
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Run migrations |
 | `pnpm db:push` | Push schema to database |
