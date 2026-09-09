@@ -1,5 +1,7 @@
 # CollabNow
 
+[![CI](https://github.com/hasnaintypes/collab-now/actions/workflows/ci.yml/badge.svg)](https://github.com/hasnaintypes/collab-now/actions/workflows/ci.yml)
+
 A real-time collaborative document editor built for modern teams. Create, edit, and share documents with live presence, inline comments, and granular access control.
 
 This repo is a **Turborepo monorepo** with a feature-based (screaming architecture) app structure.
@@ -127,6 +129,10 @@ Run from the repo root — Turborepo fans these out to the right workspace(s):
 | `pnpm db:studio` | Open Drizzle Studio |
 
 To target a single workspace directly, use pnpm's `--filter`, e.g. `pnpm --filter web run build`.
+
+## CI
+
+Every PR and push to `master` runs `pnpm lint` → `pnpm check-types` → `pnpm test` → `pnpm build` via GitHub Actions (`.github/workflows/ci.yml`). The Playwright E2E smoke test needs a real Postgres/Liveblocks backend, so it's wired as a separate `workflow_dispatch`-only job rather than blocking every PR.
 
 ## License
 

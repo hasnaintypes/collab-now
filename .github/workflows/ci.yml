@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Real values are picked up automatically once added under
+  # Settings -> Secrets and variables -> Actions (never commit real values here).
+  # Sensible fallbacks below let lint/type-check/test/build succeed without them,
+  # since none of those tasks touch a real database or third-party API at
+  # build time (DB/Liveblocks clients are lazily initialized on first use).
+  DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://ci:ci@localhost:5432/ci' }}
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET || 'ci-placeholder-secret-not-for-prod-use' }}
+  BETTER_AUTH_URL: http://localhost:3000
+  NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY }}
+  LIVEBLOCKS_SECRET_KEY: ${{ secrets.LIVEBLOCKS_SECRET_KEY }}
+  UPLOADTHING_TOKEN: ${{ secrets.UPLOADTHING_TOKEN }}
+  GMAIL_USER: ${{ secrets.GMAIL_USER }}
+  GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+
+jobs:
+  ci:
+    name: Lint, type-check, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm check-types
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  e2e:
+    name: E2E smoke test (manual)
+    needs: ci
+    # Playwright's global setup seeds a user directly into a real Postgres DB
+    # and drives a real Liveblocks-backed dev server (see apps/web/e2e/global-setup.ts),
+    # so this only runs on-demand once DATABASE_URL/LIVEBLOCKS_SECRET_KEY/etc. are
+    # populated as real repo secrets - it does not block PRs or pushes.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Run E2E smoke test
+        run: pnpm test:e2e
+        env:
+          E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}

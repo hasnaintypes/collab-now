@@ -33,7 +33,7 @@ To target a single workspace: `pnpm --filter web run build` (or `--filter @colla
 
 Playwright (`apps/web/playwright.config.ts` + `apps/web/e2e/`) runs one smoke flow: sign in → create a document → edit it → sign out, against a real dev server (`pnpm dev`, auto-started unless `E2E_BASE_URL` is set) and a real Postgres/Liveblocks backend from `apps/web/.env` — there's no mocking at this layer, so it needs valid credentials the same way `pnpm dev` does. `apps/web/e2e/global-setup.ts` seeds one verified test user directly into Postgres (email/password from `E2E_USER_EMAIL`/`E2E_USER_PASSWORD`, defaulting to `e2e@collabnow.test`) using Better Auth's own `hashPassword` — this sidesteps clicking a real verification-email link, it isn't a security bypass in the app itself. The seed is idempotent and persists across runs; nothing currently tears it down.
 
-There is currently **no CI** configured in this repo (tracked as P0-12 in `docs/ROADMAP.md`) — tests only run when invoked locally for now.
+A GitHub Actions workflow (`.github/workflows/ci.yml`, P0-12) runs `pnpm lint` → `pnpm check-types` → `pnpm test` → `pnpm build` on every PR and push to `master`, with pnpm/turbo caching. Vitest unit tests run in CI; the Playwright E2E smoke test does not (it needs a real Postgres/Liveblocks backend) — it's wired as a separate `workflow_dispatch`-only job for once real secrets are added under repo Settings, and branch protection requiring the main job to pass is a follow-up GitHub settings change coordinated with the repo owner (not yet enabled).
 
 ## Architecture
 
