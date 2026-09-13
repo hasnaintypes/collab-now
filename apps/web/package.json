@@ -17,6 +17,7 @@
     "@collabnow/db": "workspace:*",
     "@collabnow/email": "workspace:*",
     "@floating-ui/react-dom": "^2.1.8",
+    "@google/genai": "^2.21.0",
     "@lexical/html": "0.35.0",
     "@lexical/list": "^0.35.0",
     "@lexical/markdown": "0.35.0",
