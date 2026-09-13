@@ -64,6 +64,9 @@ GMAIL_APP_PASSWORD=
 PADDLE_API_KEY=
 PADDLE_WEBHOOK_SECRET=
 PADDLE_ENV=sandbox
+
+INNGEST_EVENT_KEY=
+INNGEST_SIGNING_KEY=
 ```
 
 See `apps/web/.env.example` for the full list.
@@ -77,6 +80,14 @@ pnpm dev
 ```
 
 `pnpm dev` runs only the `web` app. Use `pnpm dev:all` to also start the `extension` dev server.
+
+Background jobs (P0-16, see `apps/web/src/lib/inngest/`) run through [Inngest](https://www.inngest.com/). To exercise them locally alongside `pnpm dev`, run its dev server in a separate terminal — no `INNGEST_*` env vars needed for local dev:
+
+```bash
+npx inngest-cli@latest dev
+```
+
+This opens a dashboard at `http://localhost:8288` that discovers functions served from `apps/web/src/app/api/inngest/route.ts` and lets you trigger/inspect test runs.
 
 ## Project Structure
 
