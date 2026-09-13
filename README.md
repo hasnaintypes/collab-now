@@ -60,6 +60,10 @@ UPLOADTHING_TOKEN=
 
 GMAIL_USER=
 GMAIL_APP_PASSWORD=
+
+PADDLE_API_KEY=
+PADDLE_WEBHOOK_SECRET=
+PADDLE_ENV=sandbox
 ```
 
 See `apps/web/.env.example` for the full list.
