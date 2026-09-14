@@ -64,7 +64,7 @@ src/lib/           Cross-cutting infra (liveblocks, uploadthing, utils)
 src/types/         Ambient types shared by 3+ features
 ```
 
-Feature modules today: `auth`, `documents`, `editor`, `comments`, `notifications`, `workspace`, `activity`, `profile`, `settings`, `help`, `marketing`, `ingestion` (Phase 1 AI-notes source fetching — starting with `features/ingestion/lib/youtube-transcript.ts`, P1-2; not yet wired to a job pipeline, see P1-5). When adding code, put it in the owning feature directory rather than `src/lib` unless it's genuinely cross-cutting infrastructure.
+Feature modules today: `auth`, `documents`, `editor`, `comments`, `notifications`, `workspace`, `activity`, `profile`, `settings`, `help`, `marketing`, `ingestion` (Phase 1 AI-notes source fetching — `features/ingestion/lib/youtube-transcript.ts` (P1-2) and `features/ingestion/lib/article-extractor.ts` (P1-3, `@mozilla/readability` + `jsdom`, no JS execution/headless browser — a page whose content only exists after client-side JS runs is expected to fail extraction, not be rendered); neither is wired to a job pipeline yet, see P1-5). When adding code, put it in the owning feature directory rather than `src/lib` unless it's genuinely cross-cutting infrastructure.
 
 Server actions live under `features/<name>/actions/*.actions.ts` with a `"use server"` directive, e.g. `features/documents/actions/room.actions.ts`, `features/workspace/actions/workspace.actions.ts`.
 
