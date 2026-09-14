@@ -136,6 +136,78 @@ export const documentStar = pgTable(
   (table) => [index("document_star_user_id_idx").on(table.userId)]
 );
 
+// ── Ingestion Job ────────────────────────────────────────────
+// P1-1 / PRD §9: one row per URL submitted for AI notes generation
+// (YouTube video or article). `sourceType`/`status` are plain `text`
+// (not a DB enum), matching `role`/`action` elsewhere in this schema —
+// validated at the app layer, not the DB layer.
+
+export const ingestionJob = pgTable(
+  "ingestion_job",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    sourceUrl: text("source_url").notNull(),
+    /** "youtube" | "article" */
+    sourceType: text("source_type").notNull(),
+    /** "queued" | "processing" | "ready" | "failed" */
+    status: text("status").notNull().default("queued"),
+    errorMessage: text("error_message"),
+    requesterId: text("requester_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("ingestion_job_requester_id_idx").on(table.requesterId),
+    index("ingestion_job_workspace_id_idx").on(table.workspaceId),
+  ]
+);
+
+// ── Source Content ───────────────────────────────────────────
+// P1-1 / PRD §9 & §10: the retained raw transcript/article text for an
+// `ingestionJob`, reused for style regeneration and chat/RAG. `documentId`
+// is nullable because a `document` doesn't exist yet while the job is
+// still queued/processing — it's filled in once notes generation succeeds.
+// Both FKs cascade: deleting the job (rare) or deleting the resulting
+// document (normal user action) purges this row, per the P0-17 retention
+// decision — there is no independent TTL.
+
+export const sourceContent = pgTable(
+  "source_content",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    ingestionJobId: text("ingestion_job_id")
+      .notNull()
+      .references(() => ingestionJob.id, { onDelete: "cascade" }),
+    documentId: text("document_id").references(() => document.id, {
+      onDelete: "cascade",
+    }),
+    rawText: text("raw_text").notNull(),
+    /** "en" | "hi" | "ur" — detected source language, per PRD FR-6. */
+    sourceLanguage: text("source_language").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    // One source_content row per job.
+    uniqueIndex("source_content_ingestion_job_id_idx").on(
+      table.ingestionJobId
+    ),
+    // At most one source_content row per document (multiple NULLs, for
+    // jobs that haven't produced a document yet, are allowed — Postgres
+    // unique indexes treat each NULL as distinct).
+    uniqueIndex("source_content_document_id_idx").on(table.documentId),
+  ]
+);
+
 // ── Activity Log ─────────────────────────────────────────────
 
 export const activityLog = pgTable(
