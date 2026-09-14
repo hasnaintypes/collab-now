@@ -12,6 +12,8 @@ import {
   documentCollaborator,
   documentStar,
   activityLog,
+  ingestionJob,
+  sourceContent,
   rateLimitBucket,
 } from "./index";
 
@@ -137,6 +139,57 @@ describe("activityLog", () => {
   it("cascades delete when its workspace or user is deleted", () => {
     expect(foreignKey(activityLog, "workspace_id").onDelete).toBe("cascade");
     expect(foreignKey(activityLog, "user_id").onDelete).toBe("cascade");
+  });
+});
+
+describe("ingestionJob", () => {
+  it("cascades delete when its requester or workspace is deleted", () => {
+    expect(foreignKey(ingestionJob, "requester_id").onDelete).toBe("cascade");
+    expect(foreignKey(ingestionJob, "workspace_id").onDelete).toBe("cascade");
+  });
+
+  it("defaults status to queued", () => {
+    const { columns } = getTableConfig(ingestionJob);
+    const status = columns.find((c) => c.name === "status");
+    expect(status?.default).toBe("queued");
+    expect(status?.notNull).toBe(true);
+  });
+
+  it("has requesterId and workspaceId indexes for per-user/per-workspace job lookups", () => {
+    const { indexes } = getTableConfig(ingestionJob);
+    const names = indexes.map((i) => i.config.name);
+    expect(names).toContain("ingestion_job_requester_id_idx");
+    expect(names).toContain("ingestion_job_workspace_id_idx");
+  });
+});
+
+describe("sourceContent", () => {
+  it("cascades delete when its ingestion job or resulting document is deleted", () => {
+    // The P0-17 retention decision: deleting the document (normal user
+    // action) or the job (rare) purges the raw source text, rather than
+    // an independent TTL/cleanup job.
+    expect(foreignKey(sourceContent, "ingestion_job_id").onDelete).toBe(
+      "cascade"
+    );
+    expect(foreignKey(sourceContent, "document_id").onDelete).toBe("cascade");
+  });
+
+  it("allows documentId to be null until notes generation succeeds", () => {
+    const { columns } = getTableConfig(sourceContent);
+    const documentId = columns.find((c) => c.name === "document_id");
+    expect(documentId?.notNull).toBe(false);
+  });
+
+  it("only allows one source_content row per ingestion job and per document", () => {
+    const { indexes } = getTableConfig(sourceContent);
+    const jobIdx = indexes.find(
+      (i) => i.config.name === "source_content_ingestion_job_id_idx"
+    );
+    const docIdx = indexes.find(
+      (i) => i.config.name === "source_content_document_id_idx"
+    );
+    expect(jobIdx?.config.unique).toBe(true);
+    expect(docIdx?.config.unique).toBe(true);
   });
 });
 
