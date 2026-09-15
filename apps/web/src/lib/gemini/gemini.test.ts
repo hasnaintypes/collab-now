@@ -24,7 +24,7 @@ vi.mock("@google/genai", () => ({
 // GEMINI_API_KEY every call" vs. "reads it once".
 async function freshGemini() {
   vi.resetModules();
-  return import("./gemini");
+  return import("./index");
 }
 
 beforeEach(() => {

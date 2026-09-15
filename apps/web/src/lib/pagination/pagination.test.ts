@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeCursor, decodeCursor } from "./pagination";
+import { encodeCursor, decodeCursor } from "./index";
 
 describe("encodeCursor / decodeCursor", () => {
   it("round-trips a cursor", () => {

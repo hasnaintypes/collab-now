@@ -3,9 +3,9 @@
 import { nanoid } from "nanoid";
 import { headers } from "next/headers";
 import { auth } from "@/features/auth/lib";
-import { liveblocks } from "@/lib/liveblocks";
+import { liveblocks, getAccessType } from "@/lib/liveblocks";
 import { revalidatePath, updateTag, unstable_cache } from "next/cache";
-import { getAccessType, parseStringify } from "@/lib/utils";
+import { parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
 import {
   type ActionResult,

@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 /**
  * Server-only Gemini client wrapper. `GEMINI_API_KEY` is never read until
- * first use (same lazy-init `Proxy` pattern as `liveblocks.ts`), so importing
+ * first use (same lazy-init `Proxy` pattern as `lib/liveblocks/client.ts`), so importing
  * this module doesn't blow up in contexts where the env var isn't set yet
  * (e.g. build time, or tests that mock this module entirely).
  *

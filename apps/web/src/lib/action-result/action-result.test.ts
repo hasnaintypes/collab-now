@@ -4,7 +4,7 @@ import {
   actionError,
   ActionError,
   safeAction,
-} from "./action-result";
+} from "./index";
 
 describe("actionSuccess / actionError", () => {
   it("builds a success result", () => {

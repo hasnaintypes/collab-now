@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cn, parseStringify, getAccessType, dateConverter, getUserColor } from "./utils";
+import { cn, parseStringify, dateConverter, getUserColor } from "./index";
 
 describe("cn", () => {
   it("merges class names and lets tailwind-merge resolve conflicts", () => {
@@ -20,24 +20,6 @@ describe("parseStringify", () => {
   it("drops properties JSON can't represent (e.g. undefined, functions)", () => {
     const original = { a: 1, b: undefined, c: () => "x" };
     expect(parseStringify(original)).toEqual({ a: 1 });
-  });
-});
-
-describe("getAccessType", () => {
-  it("maps creator/editor to full write access", () => {
-    expect(getAccessType("creator")).toEqual(["room:write"]);
-    expect(getAccessType("editor")).toEqual(["room:write"]);
-  });
-
-  it("maps viewer to read + presence access", () => {
-    expect(getAccessType("viewer")).toEqual(["room:read", "room:presence:write"]);
-  });
-
-  it("falls back to read-only access for an unrecognized type", () => {
-    expect(getAccessType("unknown" as UserType)).toEqual([
-      "room:read",
-      "room:presence:write",
-    ]);
   });
 });
 
