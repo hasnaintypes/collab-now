@@ -7,6 +7,7 @@ import {
   YoutubeTranscriptTooManyRequestError,
   YoutubeTranscriptVideoUnavailableError,
   type TranscriptConfig,
+  type TranscriptResponse,
 } from "youtube-transcript";
 
 /**
@@ -59,6 +60,42 @@ export interface YoutubeTranscriptResult {
   text: string;
   /** Caption track language code YouTube reported (e.g. "en", "hi"). */
   language: string;
+  /**
+   * Total video duration in seconds, estimated from the caption track's own
+   * segment timings (see `estimateDurationSeconds` — used by P1-4 source
+   * validation to enforce the 60-minute cap). This is a byproduct of
+   * captions we already fetched, not a separate video-metadata lookup, so
+   * it's only known *after* the transcript fetch succeeds, not before it.
+   */
+  durationSeconds: number;
+}
+
+/**
+ * `youtube-transcript`'s two caption-XML parsers report segment
+ * `offset`/`duration` in different units depending on which format YouTube
+ * happened to serve — the modern `srv3` format uses milliseconds, the older
+ * classic-fallback format uses seconds — with nothing in the returned data
+ * indicating which one was used. A single caption line is essentially never
+ * displayed on screen for anywhere near this many real-world seconds, so an
+ * average segment duration comfortably above it can only mean the values
+ * are actually milliseconds.
+ */
+const MS_HEURISTIC_THRESHOLD_SECONDS = 30;
+
+/**
+ * Normalizes caption segment timings to a single "duration of the
+ * transcript, in seconds" figure regardless of which unit the underlying
+ * library happened to return (see `MS_HEURISTIC_THRESHOLD_SECONDS`).
+ */
+function estimateDurationSeconds(segments: TranscriptResponse[]): number {
+  const last = segments[segments.length - 1]!;
+  const rawEnd = last.offset + last.duration;
+  const averageSegmentDuration =
+    segments.reduce((sum, segment) => sum + segment.duration, 0) /
+    segments.length;
+
+  const isMilliseconds = averageSegmentDuration > MS_HEURISTIC_THRESHOLD_SECONDS;
+  return isMilliseconds ? rawEnd / 1000 : rawEnd;
 }
 
 export interface FetchYoutubeTranscriptOptions {
@@ -153,8 +190,9 @@ export async function fetchYoutubeTranscript(
         .replace(/\s+/g, " ")
         .trim();
       const language = segments[0].lang ?? "unknown";
+      const durationSeconds = estimateDurationSeconds(segments);
 
-      return { text, language };
+      return { text, language, durationSeconds };
     } catch (error) {
       if (error instanceof TranscriptFetchError) throw error;
 
