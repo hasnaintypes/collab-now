@@ -18,7 +18,9 @@ import {
   validateYoutubeSource,
   validateArticleSource,
   SourceValidationError,
+  type SupportedLanguage,
 } from "../lib/source-validator";
+import { generateNotes } from "../lib/notes-generator";
 import type { SourceType } from "../lib/source-detector";
 
 /**
@@ -30,13 +32,13 @@ import type { SourceType } from "../lib/source-detector";
  * has a job id before this function even starts running (FR-7).
  *
  * Scope note: this function's last step marks the job "ready" once the
- * source text is fetched, validated, and persisted to `source_content` —
- * that's as far as P1-5 goes. Notes generation (P1-6) and saving a
- * `document` (P1-7) are separate, later issues that will extend this same
- * function with more steps *before* that final status flip, rather than
- * replacing it — Inngest's step memoization means already-completed steps
- * replay instantly on a later run, so growing the function over time is the
- * intended shape, not a rewrite.
+ * source text is fetched, validated, persisted to `source_content`, and
+ * (P1-6) Gemini-generated notes are persisted alongside it — that's as far
+ * as this issue goes. Saving a `document` (P1-7) is a separate, later issue
+ * that will extend this same function with more steps *before* that final
+ * status flip, rather than replacing it — Inngest's step memoization means
+ * already-completed steps replay instantly on a later run, so growing the
+ * function over time is the intended shape, not a rewrite.
  *
  * Retry strategy: `fetchYoutubeTranscript`/`fetchArticle` are called with
  * `maxAttempts: 1`, disabling their own internal sleep-based backoff —
@@ -46,7 +48,12 @@ import type { SourceType } from "../lib/source-detector";
  * step; anything else (a permanent/business failure — bad URL, no
  * captions, paywalled page, over a cap, unsupported language) is wrapped in
  * `NonRetriableError` so Inngest gives up immediately instead of retrying a
- * failure that will never succeed.
+ * failure that will never succeed. The `generate-notes` step (P1-6) is
+ * deliberately *not* given this permanent/transient split — Gemini's
+ * failure modes (missing config, empty response, rate limits, possible
+ * safety-filter blocks) aren't well-characterized yet, so any failure there
+ * is just left to propagate and retry via the same `retries: 4`/`onFailure`
+ * plumbing everything else already goes through.
  */
 /**
  * Runs once Inngest gives up on a run — either every retry was exhausted,
@@ -119,7 +126,7 @@ export const processIngestionJob = inngest.createFunction(
     const language = await step.run(
       "validate-and-persist-source",
       async () => {
-        let language: string;
+        let language: SupportedLanguage;
         try {
           language = isYoutubeSource(sourceType, source)
             ? validateYoutubeSource(source)
@@ -154,6 +161,27 @@ export const processIngestionJob = inngest.createFunction(
         return language;
       }
     );
+
+    await step.run("generate-notes", async () => {
+      // Idempotent, and avoids paying for a second Gemini call on retry: if
+      // a previous attempt already generated and persisted notes for this
+      // job, skip straight past — Gemini calls aren't free, unlike the
+      // cheap existence checks the other steps do.
+      const [existing] = await db
+        .select({ generatedNotes: sourceContent.generatedNotes })
+        .from(sourceContent)
+        .where(eq(sourceContent.ingestionJobId, jobId))
+        .limit(1);
+
+      if (existing?.generatedNotes) return;
+
+      const notes = await generateNotes({ text: source.text, language });
+
+      await db
+        .update(sourceContent)
+        .set({ generatedNotes: notes, updatedAt: new Date() })
+        .where(eq(sourceContent.ingestionJobId, jobId));
+    });
 
     await step.run("mark-ready", async () => {
       await db
