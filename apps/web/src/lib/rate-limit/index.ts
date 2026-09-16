@@ -120,4 +120,16 @@ export const RATE_LIMITS = {
     limit: 20,
     windowMs: 60 * 1000, // 20 per minute
   },
+  /**
+   * `enqueueIngestionJob` — apps/web/src/features/ingestion/actions/ingestion.actions.ts
+   * (P1-5). Lower than the other limits on purpose: unlike a document/invite
+   * insert, each submission fetches an external video/article and (once
+   * P1-6 lands) calls Gemini — a meaningfully more expensive operation to
+   * let one account spam.
+   */
+  ingestionSubmit: {
+    name: "ingestion-submit",
+    limit: 10,
+    windowMs: 60 * 60 * 1000, // 10 per hour
+  },
 } as const satisfies Record<string, RateLimitConfig>;
