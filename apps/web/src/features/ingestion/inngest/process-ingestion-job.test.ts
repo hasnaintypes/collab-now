@@ -32,6 +32,7 @@ vi.mock("@collabnow/db", () => ({
   sourceContent: {
     id: "source_content.id",
     ingestionJobId: "source_content.ingestion_job_id",
+    generatedNotes: "source_content.generated_notes",
   },
 }));
 
@@ -72,6 +73,13 @@ vi.mock("../lib/source-validator", async () => {
   };
 });
 
+const { generateNotesMock } = vi.hoisted(() => ({
+  generateNotesMock: vi.fn(),
+}));
+vi.mock("../lib/notes-generator", () => ({
+  generateNotes: generateNotesMock,
+}));
+
 const { TranscriptFetchError } = await import("../lib/youtube-transcript");
 const { ArticleFetchError } = await import("../lib/article-extractor");
 const { SourceValidationError } = await import("../lib/source-validator");
@@ -91,6 +99,7 @@ beforeEach(() => {
   fetchArticleMock.mockReset();
   validateYoutubeSourceMock.mockReset();
   validateArticleSourceMock.mockReset();
+  generateNotesMock.mockReset().mockResolvedValue("generated notes");
 });
 
 const youtubeEvent = {
@@ -143,12 +152,20 @@ describe("processIngestionJob", () => {
       rawText: "hello world",
       sourceLanguage: "en",
     });
+    expect(generateNotesMock).toHaveBeenCalledWith({
+      text: "hello world",
+      language: "en",
+    });
     expect(updateSet).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ status: "processing" })
     );
     expect(updateSet).toHaveBeenNthCalledWith(
       2,
+      expect.objectContaining({ generatedNotes: "generated notes" })
+    );
+    expect(updateSet).toHaveBeenNthCalledWith(
+      3,
       expect.objectContaining({ status: "ready" })
     );
   });
@@ -193,6 +210,51 @@ describe("processIngestionJob", () => {
     await t.execute();
 
     expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("skips calling Gemini again if notes were already generated for this job (idempotent retry)", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    // First select (validate-and-persist-source) finds no existing row;
+    // second select (generate-notes) finds notes already persisted from a
+    // previous attempt.
+    selectLimit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ generatedNotes: "already generated" }]);
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    await t.execute();
+
+    expect(generateNotesMock).not.toHaveBeenCalled();
+    expect(updateSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ generatedNotes: expect.anything() })
+    );
+  });
+
+  it("propagates a Gemini failure as-is, without wrapping it in NonRetriableError", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    generateNotesMock.mockRejectedValueOnce(new Error("Gemini is down"));
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    const generateStep = await t.executeStep("generate-notes");
+
+    expect(generateStep.error).toMatchObject({ message: "Gemini is down" });
+    expect(generateStep.error).not.toMatchObject({ name: "NonRetriableError" });
   });
 
   it("rethrows a transient (\"blocked\") fetch failure so Inngest retries the step", async () => {
