@@ -7,10 +7,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 function selectChain(rows: unknown[]) {
   const builder: {
     from: () => typeof builder;
+    leftJoin: () => typeof builder;
     where: () => typeof builder;
     limit: () => Promise<unknown[]>;
   } = {} as never;
   builder.from = vi.fn(() => builder);
+  builder.leftJoin = vi.fn(() => builder);
   builder.where = vi.fn(() => builder);
   builder.limit = vi.fn(() => Promise.resolve(rows));
   return builder;
@@ -34,6 +36,11 @@ vi.mock("@collabnow/db", () => ({
     id: "ingestion_job.id",
     workspaceId: "ingestion_job.workspace_id",
   },
+  sourceContent: {
+    ingestionJobId: "source_content.ingestion_job_id",
+    documentId: "source_content.document_id",
+  },
+  document: { id: "document.id", roomId: "document.room_id" },
   workspaceMember: {
     id: "workspace_member.id",
     workspaceId: "workspace_member.workspace_id",
@@ -233,6 +240,7 @@ describe("getIngestionJobStatus", () => {
             errorMessage: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            roomId: null,
           },
         ])
       )
@@ -246,7 +254,7 @@ describe("getIngestionJobStatus", () => {
     });
   });
 
-  it("returns the job status for a workspace member", async () => {
+  it("returns the job status for a workspace member, with roomId null before a document exists", async () => {
     getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
     const timestamp = new Date("2024-01-01T00:00:00.000Z");
     dbMock.select
@@ -261,6 +269,7 @@ describe("getIngestionJobStatus", () => {
             errorMessage: null,
             createdAt: timestamp,
             updatedAt: timestamp,
+            roomId: null,
           },
         ])
       )
@@ -278,6 +287,45 @@ describe("getIngestionJobStatus", () => {
         errorMessage: null,
         createdAt: timestamp.toISOString(),
         updatedAt: timestamp.toISOString(),
+        roomId: null,
+      },
+    });
+  });
+
+  it("returns roomId once the job is ready and linked to a document", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    const timestamp = new Date("2024-01-01T00:00:00.000Z");
+    dbMock.select
+      .mockReturnValueOnce(
+        selectChain([
+          {
+            id: "job-1",
+            workspaceId: "ws-1",
+            status: "ready",
+            sourceType: "youtube",
+            sourceUrl: "url",
+            errorMessage: null,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            roomId: "room-1",
+          },
+        ])
+      )
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]));
+
+    const result = await getIngestionJobStatus({ jobId: "job-1" });
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        id: "job-1",
+        status: "ready",
+        sourceType: "youtube",
+        sourceUrl: "url",
+        errorMessage: null,
+        createdAt: timestamp.toISOString(),
+        updatedAt: timestamp.toISOString(),
+        roomId: "room-1",
       },
     });
   });

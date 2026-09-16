@@ -1,8 +1,12 @@
 import { NonRetriableError } from "inngest";
+import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
-import { db, ingestionJob, sourceContent } from "@collabnow/db";
+import { updateTag, revalidatePath } from "next/cache";
+import { db, ingestionJob, sourceContent, document, activityLog, user } from "@collabnow/db";
 
 import { inngest } from "@/lib/inngest/client";
+import { liveblocks } from "@/lib/liveblocks/client";
+import { documentsTag, activityTag } from "@/lib/cache-tags";
 import { ingestionJobRequested } from "./events";
 import {
   fetchYoutubeTranscript,
@@ -21,6 +25,7 @@ import {
   type SupportedLanguage,
 } from "../lib/source-validator";
 import { generateNotes } from "../lib/notes-generator";
+import { deriveDocumentTitle } from "../lib/derive-document-title";
 import type { SourceType } from "../lib/source-detector";
 
 /**
@@ -32,13 +37,19 @@ import type { SourceType } from "../lib/source-detector";
  * has a job id before this function even starts running (FR-7).
  *
  * Scope note: this function's last step marks the job "ready" once the
- * source text is fetched, validated, persisted to `source_content`, and
- * (P1-6) Gemini-generated notes are persisted alongside it — that's as far
- * as this issue goes. Saving a `document` (P1-7) is a separate, later issue
- * that will extend this same function with more steps *before* that final
- * status flip, rather than replacing it — Inngest's step memoization means
- * already-completed steps replay instantly on a later run, so growing the
- * function over time is the intended shape, not a rewrite.
+ * source text is fetched, validated, persisted to `source_content`,
+ * (P1-6) Gemini-generated notes are persisted alongside it, and (P1-7) a
+ * real `document` row + Liveblocks room exist and are linked back via
+ * `source_content.documentId`. The new document starts with *empty* room
+ * content, same as a manually-created one — the generated notes are
+ * already durably stored in `source_content.generatedNotes`, and the
+ * editor fills the room in client-side the first time the document is
+ * opened (see `features/editor`), rather than this job trying to seed
+ * Liveblocks' Yjs-backed room storage from the server. That's a
+ * deliberate choice: this app's rooms sync Lexical state via Yjs, and
+ * there's no supported way to construct a matching Yjs update outside a
+ * live editor — attempting it server-side risks silently malformed room
+ * state instead of a clear error.
  *
  * Retry strategy: `fetchYoutubeTranscript`/`fetchArticle` are called with
  * `maxAttempts: 1`, disabling their own internal sleep-based backoff —
@@ -90,7 +101,8 @@ export const processIngestionJob = inngest.createFunction(
     onFailure: handleIngestionJobFailure,
   },
   async ({ event, step }) => {
-    const { jobId, sourceUrl, sourceType } = event.data;
+    const { jobId, sourceUrl, sourceType, requesterId, workspaceId } =
+      event.data;
 
     await step.run("mark-processing", async () => {
       await db
@@ -162,7 +174,7 @@ export const processIngestionJob = inngest.createFunction(
       }
     );
 
-    await step.run("generate-notes", async () => {
+    const notes = await step.run("generate-notes", async () => {
       // Idempotent, and avoids paying for a second Gemini call on retry: if
       // a previous attempt already generated and persisted notes for this
       // job, skip straight past — Gemini calls aren't free, unlike the
@@ -173,14 +185,90 @@ export const processIngestionJob = inngest.createFunction(
         .where(eq(sourceContent.ingestionJobId, jobId))
         .limit(1);
 
-      if (existing?.generatedNotes) return;
+      if (existing?.generatedNotes) return existing.generatedNotes;
 
-      const notes = await generateNotes({ text: source.text, language });
+      const generated = await generateNotes({ text: source.text, language });
 
       await db
         .update(sourceContent)
-        .set({ generatedNotes: notes, updatedAt: new Date() })
+        .set({ generatedNotes: generated, updatedAt: new Date() })
         .where(eq(sourceContent.ingestionJobId, jobId));
+
+      return generated;
+    });
+
+    const roomId = await step.run("save-document", async () => {
+      // Idempotent: a retry that reaches this step again after a previous
+      // attempt already created the room/document (but failed somewhere
+      // after) shouldn't create a second room and orphan the first.
+      const [existing] = await db
+        .select({ documentId: sourceContent.documentId })
+        .from(sourceContent)
+        .where(eq(sourceContent.ingestionJobId, jobId))
+        .limit(1);
+
+      if (existing?.documentId) {
+        const [existingDocument] = await db
+          .select({ roomId: document.roomId })
+          .from(document)
+          .where(eq(document.id, existing.documentId))
+          .limit(1);
+        return existingDocument?.roomId ?? null;
+      }
+
+      const [requester] = await db
+        .select({ email: user.email })
+        .from(user)
+        .where(eq(user.id, requesterId))
+        .limit(1);
+      if (!requester) {
+        // The requester's account was deleted after the job was queued —
+        // permanent, retrying won't bring the user back.
+        throw new NonRetriableError(
+          "The user who requested this job no longer exists."
+        );
+      }
+
+      const title = deriveDocumentTitle({
+        articleTitle: isYoutubeSource(sourceType, source)
+          ? null
+          : source.title,
+        notes,
+      });
+      const newRoomId = nanoid();
+
+      // Mirrors `createDocument` (`features/documents/actions/room.actions.ts`)
+      // exactly, so a document created this way is indistinguishable from a
+      // manually-created one for editing/sharing/comments/star/archive/export.
+      // The room starts with empty content, same as a manual "New Document".
+      await liveblocks.createRoom(newRoomId, {
+        metadata: { creatorId: requesterId, email: requester.email, title },
+        usersAccesses: { [requester.email]: ["room:write"] },
+        defaultAccesses: [],
+      });
+
+      const [newDocument] = await db
+        .insert(document)
+        .values({ roomId: newRoomId, title, creatorId: requesterId, workspaceId })
+        .returning({ id: document.id });
+
+      await db
+        .update(sourceContent)
+        .set({ documentId: newDocument!.id, updatedAt: new Date() })
+        .where(eq(sourceContent.ingestionJobId, jobId));
+
+      await db.insert(activityLog).values({
+        workspaceId,
+        userId: requesterId,
+        action: "created",
+        metadata: JSON.stringify({ roomId: newRoomId, title }),
+      });
+
+      updateTag(documentsTag(requesterId));
+      updateTag(activityTag(workspaceId));
+      revalidatePath("/dashboard");
+
+      return newRoomId;
     });
 
     await step.run("mark-ready", async () => {
@@ -190,7 +278,7 @@ export const processIngestionJob = inngest.createFunction(
         .where(eq(ingestionJob.id, jobId));
     });
 
-    return { jobId, status: "ready" as const, language };
+    return { jobId, status: "ready" as const, language, roomId };
   }
 );
 

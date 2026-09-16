@@ -3,7 +3,7 @@
 import { nanoid } from "nanoid";
 import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
-import { db, ingestionJob, workspaceMember } from "@collabnow/db";
+import { db, ingestionJob, sourceContent, document, workspaceMember } from "@collabnow/db";
 
 import { auth } from "@/features/auth/lib";
 import { inngest } from "@/lib/inngest/client";
@@ -139,28 +139,48 @@ export const getIngestionJobStatus = async ({
   }
 
   return safeAction(async () => {
-    const [job] = await db
-      .select()
+    // Left-joined through source_content to document so `roomId` comes
+    // back in the same query once P1-7's save-document step has linked
+    // them — both joins resolve to all-null columns for a job that hasn't
+    // reached that point yet, not a missing row.
+    const [row] = await db
+      .select({
+        id: ingestionJob.id,
+        workspaceId: ingestionJob.workspaceId,
+        status: ingestionJob.status,
+        sourceType: ingestionJob.sourceType,
+        sourceUrl: ingestionJob.sourceUrl,
+        errorMessage: ingestionJob.errorMessage,
+        createdAt: ingestionJob.createdAt,
+        updatedAt: ingestionJob.updatedAt,
+        roomId: document.roomId,
+      })
       .from(ingestionJob)
+      .leftJoin(
+        sourceContent,
+        eq(sourceContent.ingestionJobId, ingestionJob.id)
+      )
+      .leftJoin(document, eq(sourceContent.documentId, document.id))
       .where(eq(ingestionJob.id, jobId))
       .limit(1);
 
-    if (!job) {
+    if (!row) {
       throw new ActionError("That job could not be found.");
     }
 
-    // Workspace-shared, not requester-only — once P1-7 lands, the resulting
-    // document will be visible to the whole workspace anyway.
-    await requireWorkspaceMembership(job.workspaceId, session.user.id);
+    // Workspace-shared, not requester-only — the resulting document is
+    // visible to the whole workspace anyway once it exists (P1-7).
+    await requireWorkspaceMembership(row.workspaceId, session.user.id);
 
     return parseStringify({
-      id: job.id,
-      status: job.status as IngestionJobStatus,
-      sourceType: job.sourceType as SourceType,
-      sourceUrl: job.sourceUrl,
-      errorMessage: job.errorMessage,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
+      id: row.id,
+      status: row.status as IngestionJobStatus,
+      sourceType: row.sourceType as SourceType,
+      sourceUrl: row.sourceUrl,
+      errorMessage: row.errorMessage,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      roomId: row.roomId ?? null,
     });
   }, "Failed to load job status. Please try again.");
 };

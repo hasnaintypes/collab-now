@@ -8,11 +8,13 @@ const {
   updateSet,
   updateWhere,
   insertValues,
+  returningMock,
   selectLimit,
 } = vi.hoisted(() => {
   const updateWhere = vi.fn(() => Promise.resolve(undefined));
   const updateSet = vi.fn(() => ({ where: updateWhere }));
-  const insertValues = vi.fn(() => Promise.resolve(undefined));
+  const returningMock = vi.fn(() => Promise.resolve([{ id: "doc-1" }]));
+  const insertValues = vi.fn(() => ({ returning: returningMock }));
   const selectLimit = vi.fn(() => Promise.resolve([] as unknown[]));
   const dbMock = {
     update: vi.fn(() => ({ set: updateSet })),
@@ -23,7 +25,7 @@ const {
       })),
     })),
   };
-  return { dbMock, updateSet, updateWhere, insertValues, selectLimit };
+  return { dbMock, updateSet, updateWhere, insertValues, returningMock, selectLimit };
 });
 
 vi.mock("@collabnow/db", () => ({
@@ -33,7 +35,21 @@ vi.mock("@collabnow/db", () => ({
     id: "source_content.id",
     ingestionJobId: "source_content.ingestion_job_id",
     generatedNotes: "source_content.generated_notes",
+    documentId: "source_content.document_id",
   },
+  document: { id: "document.id", roomId: "document.room_id" },
+  activityLog: {},
+  user: { id: "user.id", email: "user.email" },
+}));
+
+const { createRoomMock } = vi.hoisted(() => ({ createRoomMock: vi.fn() }));
+vi.mock("@/lib/liveblocks/client", () => ({
+  liveblocks: { createRoom: createRoomMock },
+}));
+
+vi.mock("next/cache", () => ({
+  updateTag: vi.fn(),
+  revalidatePath: vi.fn(),
 }));
 
 const { fetchYoutubeTranscriptMock } = vi.hoisted(() => ({
@@ -93,6 +109,7 @@ beforeEach(() => {
   updateWhere.mockClear();
   dbMock.insert.mockClear();
   insertValues.mockClear();
+  returningMock.mockReset().mockResolvedValue([{ id: "doc-1" }]);
   dbMock.select.mockClear();
   selectLimit.mockReset().mockResolvedValue([]);
   fetchYoutubeTranscriptMock.mockReset();
@@ -100,6 +117,7 @@ beforeEach(() => {
   validateYoutubeSourceMock.mockReset();
   validateArticleSourceMock.mockReset();
   generateNotesMock.mockReset().mockResolvedValue("generated notes");
+  createRoomMock.mockReset().mockResolvedValue({ type: "room", id: "room-1" });
 });
 
 const youtubeEvent = {
@@ -123,13 +141,19 @@ const articleEvent = {
 };
 
 describe("processIngestionJob", () => {
-  it("fetches, validates, and persists a YouTube transcript through to \"ready\"", async () => {
+  it("fetches, validates, and persists a YouTube transcript through to \"ready\", creating a document", async () => {
     fetchYoutubeTranscriptMock.mockResolvedValueOnce({
       text: "hello world",
       language: "en",
       durationSeconds: 120,
     });
     validateYoutubeSourceMock.mockReturnValueOnce("en");
+    generateNotesMock.mockResolvedValueOnce("# My Notes\n- point one");
+    selectLimit
+      .mockResolvedValueOnce([]) // validate-and-persist-source: no existing row
+      .mockResolvedValueOnce([]) // generate-notes: no existing notes
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -137,7 +161,8 @@ describe("processIngestionJob", () => {
     });
     const { result } = await t.execute();
 
-    expect(result).toEqual({ jobId: "job-1", status: "ready", language: "en" });
+    expect(result).toMatchObject({ jobId: "job-1", status: "ready", language: "en" });
+    expect(typeof (result as { roomId: string }).roomId).toBe("string");
     expect(fetchYoutubeTranscriptMock).toHaveBeenCalledWith(
       youtubeEvent.data.sourceUrl,
       { maxAttempts: 1 }
@@ -156,21 +181,44 @@ describe("processIngestionJob", () => {
       text: "hello world",
       language: "en",
     });
+
+    // Room created with a title derived from the notes' first heading
+    // (YouTube sources have no article title of their own).
+    const [roomIdArg, roomOptions] = createRoomMock.mock.calls[0]!;
+    expect(roomOptions).toEqual({
+      metadata: {
+        creatorId: "user-1",
+        email: "user1@example.com",
+        title: "My Notes",
+      },
+      usersAccesses: { "user1@example.com": ["room:write"] },
+      defaultAccesses: [],
+    });
+    expect(insertValues).toHaveBeenCalledWith({
+      roomId: roomIdArg,
+      title: "My Notes",
+      creatorId: "user-1",
+      workspaceId: "ws-1",
+    });
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: "doc-1" })
+    );
+
     expect(updateSet).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ status: "processing" })
     );
     expect(updateSet).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ generatedNotes: "generated notes" })
+      expect.objectContaining({ generatedNotes: "# My Notes\n- point one" })
     );
     expect(updateSet).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.objectContaining({ status: "ready" })
     );
   });
 
-  it("fetches, validates, and persists an article through to \"ready\"", async () => {
+  it("fetches, validates, and persists an article through to \"ready\", using the article's own title", async () => {
     fetchArticleMock.mockResolvedValueOnce({
       title: "A Title",
       text: "article body",
@@ -180,6 +228,11 @@ describe("processIngestionJob", () => {
       language: null,
     });
     validateArticleSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]);
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -187,21 +240,28 @@ describe("processIngestionJob", () => {
     });
     const { result } = await t.execute();
 
-    expect(result).toEqual({ jobId: "job-1", status: "ready", language: "en" });
+    expect(result).toMatchObject({ jobId: "job-1", status: "ready", language: "en" });
     expect(fetchArticleMock).toHaveBeenCalledWith(articleEvent.data.sourceUrl, {
       maxAttempts: 1,
     });
     expect(fetchYoutubeTranscriptMock).not.toHaveBeenCalled();
+
+    const [, roomOptions] = createRoomMock.mock.calls[0]!;
+    expect(roomOptions).toMatchObject({ metadata: { title: "A Title" } });
   });
 
   it("skips the insert if source_content already exists for this job (idempotent retry)", async () => {
-    selectLimit.mockResolvedValueOnce([{ id: "existing-row" }]);
     fetchYoutubeTranscriptMock.mockResolvedValueOnce({
       text: "hi",
       language: "en",
       durationSeconds: 10,
     });
     validateYoutubeSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([{ id: "existing-row" }]) // validate-and-persist-source: already inserted
+      .mockResolvedValueOnce([]) // generate-notes: no existing notes
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -209,7 +269,9 @@ describe("processIngestionJob", () => {
     });
     await t.execute();
 
-    expect(insertValues).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalledWith(
+      expect.objectContaining({ rawText: expect.anything() })
+    );
   });
 
   it("skips calling Gemini again if notes were already generated for this job (idempotent retry)", async () => {
@@ -219,12 +281,11 @@ describe("processIngestionJob", () => {
       durationSeconds: 10,
     });
     validateYoutubeSourceMock.mockReturnValueOnce("en");
-    // First select (validate-and-persist-source) finds no existing row;
-    // second select (generate-notes) finds notes already persisted from a
-    // previous attempt.
     selectLimit
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ generatedNotes: "already generated" }]);
+      .mockResolvedValueOnce([]) // validate-and-persist-source: no existing row
+      .mockResolvedValueOnce([{ generatedNotes: "already generated" }]) // generate-notes: already generated
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -317,6 +378,55 @@ describe("processIngestionJob", () => {
 
     expect(validateStep.error).toMatchObject({ name: "NonRetriableError" });
     expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("skips creating a second room/document if this job's source_content is already linked (idempotent retry)", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([]) // validate-and-persist-source
+      .mockResolvedValueOnce([]) // generate-notes
+      .mockResolvedValueOnce([{ documentId: "doc-1" }]) // save-document: already linked
+      .mockResolvedValueOnce([{ roomId: "existing-room-1" }]); // document lookup by id
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    const { result } = await t.execute();
+
+    expect(result).toMatchObject({ roomId: "existing-room-1" });
+    expect(createRoomMock).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.anything() })
+    );
+  });
+
+  it("fails without retrying if the requesting user no longer exists", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([]) // validate-and-persist-source
+      .mockResolvedValueOnce([]) // generate-notes
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([]); // requester lookup: not found
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    const saveStep = await t.executeStep("save-document");
+
+    expect(saveStep.error).toMatchObject({ name: "NonRetriableError" });
+    expect(createRoomMock).not.toHaveBeenCalled();
   });
 });
 
