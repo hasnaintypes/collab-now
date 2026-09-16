@@ -19,7 +19,7 @@ vi.mock("@collabnow/db", () => ({
   rateLimitBucket: { key: "key", count: "count", windowStart: "window_start" },
 }));
 
-const { checkRateLimit, formatRetryAfter } = await import("./rate-limit");
+const { checkRateLimit, formatRetryAfter } = await import("./index");
 
 const config = { name: "test-limiter", limit: 5, windowMs: 60_000 };
 

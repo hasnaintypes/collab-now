@@ -52,7 +52,11 @@ describe("fetchYoutubeTranscript", () => {
 
     const result = await fetchYoutubeTranscript(URL);
 
-    expect(result).toEqual({ text: "Hello world.", language: "en" });
+    expect(result).toEqual({
+      text: "Hello world.",
+      language: "en",
+      durationSeconds: 2,
+    });
     expect(fetchTranscriptMock).toHaveBeenCalledTimes(1);
     expect(fetchTranscriptMock).toHaveBeenCalledWith(
       URL,
@@ -156,7 +160,11 @@ describe("fetchYoutubeTranscript", () => {
       baseDelayMs: 100,
     });
 
-    expect(result).toEqual({ text: "Recovered", language: "en" });
+    expect(result).toEqual({
+      text: "Recovered",
+      language: "en",
+      durationSeconds: 1,
+    });
     expect(fetchTranscriptMock).toHaveBeenCalledTimes(3);
     // Exponential backoff: 100 * 2^0, then 100 * 2^1.
     expect(delay).toHaveBeenNthCalledWith(1, 100);
@@ -185,6 +193,28 @@ describe("fetchYoutubeTranscript", () => {
       fetchYoutubeTranscript(URL, { delay, maxAttempts: 2, baseDelayMs: 10 })
     ).rejects.toMatchObject({ reason: "unknown" });
     expect(fetchTranscriptMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("estimates duration in seconds when segment timings are already in seconds (classic format)", async () => {
+    fetchTranscriptMock.mockResolvedValueOnce([
+      { text: "Hello", duration: 2, offset: 0, lang: "en" },
+      { text: "world.", duration: 2, offset: 118, lang: "en" },
+    ]);
+
+    const result = await fetchYoutubeTranscript(URL);
+
+    expect(result.durationSeconds).toBe(120);
+  });
+
+  it("normalizes duration to seconds when segment timings are in milliseconds (srv3 format)", async () => {
+    fetchTranscriptMock.mockResolvedValueOnce([
+      { text: "Hello", duration: 2000, offset: 0, lang: "en" },
+      { text: "world.", duration: 2000, offset: 118000, lang: "en" },
+    ]);
+
+    const result = await fetchYoutubeTranscript(URL);
+
+    expect(result.durationSeconds).toBe(120);
   });
 
   it("forwards a custom fetch implementation through to the underlying library", async () => {

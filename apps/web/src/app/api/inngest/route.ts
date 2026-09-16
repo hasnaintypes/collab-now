@@ -1,7 +1,6 @@
 import { serve } from "inngest/next";
 
-import { inngest } from "@/lib/inngest/client";
-import { noopIngestionTestJob } from "@/lib/inngest/functions";
+import { inngest, noopIngestionTestJob } from "@/lib/inngest";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
