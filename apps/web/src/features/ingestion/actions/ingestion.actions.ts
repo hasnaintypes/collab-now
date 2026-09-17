@@ -184,3 +184,45 @@ export const getIngestionJobStatus = async ({
     });
   }, "Failed to load job status. Please try again.");
 };
+
+/**
+ * Read side of P1-8's client-side content-seeding: the editor
+ * (`features/editor/components/plugins/seed-notes-plugin.tsx`) calls this
+ * once, on first open, only if the room turns out to be empty — most
+ * documents (manually created, or already seeded) never call this at all,
+ * since the emptiness check that gates it is a pure client-side check with
+ * no network round trip. Returns `null` for any document that isn't
+ * ingestion-derived (the inner join naturally excludes those) or whose
+ * notes haven't finished generating yet, rather than an error — both are
+ * expected, ordinary states, not failures.
+ */
+export const getGeneratedNotesForDocument = async ({
+  roomId,
+}: {
+  roomId: string;
+}): Promise<ActionResult<{ notes: string } | null>> => {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    return actionError("You must be signed in to view this document.");
+  }
+
+  return safeAction(async () => {
+    const [row] = await db
+      .select({
+        workspaceId: document.workspaceId,
+        generatedNotes: sourceContent.generatedNotes,
+      })
+      .from(document)
+      .innerJoin(sourceContent, eq(sourceContent.documentId, document.id))
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
+    if (!row || !row.generatedNotes) {
+      return null;
+    }
+
+    await requireWorkspaceMembership(row.workspaceId, session.user.id);
+
+    return { notes: row.generatedNotes };
+  }, "Failed to load this document's generated notes.");
+};

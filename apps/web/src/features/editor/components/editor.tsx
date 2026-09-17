@@ -24,6 +24,7 @@ import {
 import FloatingToolbar from "./plugins/floating-toolbar";
 import WordCountPlugin from "./plugins/word-count-plugin";
 import { ExportBridge, type ExportFunctions } from "./plugins/export-plugin";
+import SeedNotesPlugin from "./plugins/seed-notes-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/features/comments/components/comments";
 import Loader from "@/components/shared/loader";
@@ -39,6 +40,7 @@ function Placeholder() {
 }
 
 export function Editor({
+  roomId,
   currentUserType,
   onHeadingsChange,
   onWordCountChange,
@@ -80,6 +82,10 @@ export function Editor({
       />
       {onWordCountChange && <WordCountPlugin onChange={onWordCountChange} />}
       {exportRef && <ExportBridge title={documentTitle || "document"} exportRef={exportRef} />}
+      {/* Only mounted once `status` confirms the Yjs doc has actually
+          synced — checking emptiness before that would race against the
+          real synced state (see seed-notes-plugin.tsx). */}
+      {status && <SeedNotesPlugin roomId={roomId} />}
 
       <div className="flex flex-1 w-full">
         {/* Editor Content Canvas */}
