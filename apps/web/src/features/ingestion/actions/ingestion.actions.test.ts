@@ -8,11 +8,13 @@ function selectChain(rows: unknown[]) {
   const builder: {
     from: () => typeof builder;
     leftJoin: () => typeof builder;
+    innerJoin: () => typeof builder;
     where: () => typeof builder;
     limit: () => Promise<unknown[]>;
   } = {} as never;
   builder.from = vi.fn(() => builder);
   builder.leftJoin = vi.fn(() => builder);
+  builder.innerJoin = vi.fn(() => builder);
   builder.where = vi.fn(() => builder);
   builder.limit = vi.fn(() => Promise.resolve(rows));
   return builder;
@@ -39,8 +41,13 @@ vi.mock("@collabnow/db", () => ({
   sourceContent: {
     ingestionJobId: "source_content.ingestion_job_id",
     documentId: "source_content.document_id",
+    generatedNotes: "source_content.generated_notes",
   },
-  document: { id: "document.id", roomId: "document.room_id" },
+  document: {
+    id: "document.id",
+    roomId: "document.room_id",
+    workspaceId: "document.workspace_id",
+  },
   workspaceMember: {
     id: "workspace_member.id",
     workspaceId: "workspace_member.workspace_id",
@@ -77,9 +84,8 @@ vi.mock("@/lib/inngest/client", () => ({
   inngest: { send: inngestSendMock },
 }));
 
-const { enqueueIngestionJob, getIngestionJobStatus } = await import(
-  "./ingestion.actions"
-);
+const { enqueueIngestionJob, getIngestionJobStatus, getGeneratedNotesForDocument } =
+  await import("./ingestion.actions");
 
 beforeEach(() => {
   dbMock.select.mockReset();
@@ -327,6 +333,71 @@ describe("getIngestionJobStatus", () => {
         updatedAt: timestamp.toISOString(),
         roomId: "room-1",
       },
+    });
+  });
+});
+
+describe("getGeneratedNotesForDocument", () => {
+  it("rejects when the caller isn't signed in", async () => {
+    getSessionMock.mockResolvedValueOnce(null);
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "You must be signed in to view this document.",
+    });
+  });
+
+  it("returns null for a document with no linked source_content (manually created)", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(selectChain([])); // inner join finds nothing
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({ success: true, data: null });
+  });
+
+  it("returns null while notes haven't finished generating yet", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(
+      selectChain([{ workspaceId: "ws-1", generatedNotes: null }])
+    );
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({ success: true, data: null });
+  });
+
+  it("rejects when the caller isn't a member of the document's workspace", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(
+        selectChain([{ workspaceId: "ws-1", generatedNotes: "# Notes" }])
+      )
+      .mockReturnValueOnce(selectChain([])); // no membership row
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "You don't have access to this workspace.",
+    });
+  });
+
+  it("returns the generated notes for a workspace member", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(
+        selectChain([{ workspaceId: "ws-1", generatedNotes: "# Notes\n- a" }])
+      )
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]));
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({
+      success: true,
+      data: { notes: "# Notes\n- a" },
     });
   });
 });
