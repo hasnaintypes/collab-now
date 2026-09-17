@@ -81,7 +81,7 @@ pnpm dev
 
 `pnpm dev` runs only the `web` app. Use `pnpm dev:all` to also start the `extension` dev server.
 
-Background jobs (P0-16, see `apps/web/src/lib/inngest/`) run through [Inngest](https://www.inngest.com/). To exercise them locally alongside `pnpm dev`, run its dev server in a separate terminal — no `INNGEST_*` env vars needed for local dev:
+Background jobs (P0-16, see `apps/web/src/lib/inngest/`) run through [Inngest](https://www.inngest.com/). To exercise them locally alongside `pnpm dev`, set `INNGEST_DEV=1` in `apps/web/.env` and run its dev server in a separate terminal — no `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` needed for local dev, but `INNGEST_DEV=1` is required: without it the SDK defaults to "cloud mode" and every `inngest.send()` fails immediately with "no signing key found", even against a running local dev server.
 
 ```bash
 npx inngest-cli@latest dev
@@ -137,7 +137,7 @@ Run from the repo root — Turborepo fans these out to the right workspace(s):
 | `pnpm lint` | Run ESLint across the workspace |
 | `pnpm check-types` | Type-check across the workspace |
 | `pnpm test` | Run Vitest unit/integration tests (`@collabnow/db` + `web`) |
-| `pnpm test:e2e` | Run the Playwright smoke test (`web` only; needs `apps/web/.env`) |
+| `pnpm test:e2e` | Run the Playwright E2E specs (`web` only; needs `apps/web/.env`) — the sign-in/create/edit smoke test, plus a "paste a URL → wait for the job → open the generated document" spec that additionally needs `npx inngest-cli@latest dev` running in a separate terminal and a real `GEMINI_API_KEY` set |
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Run migrations |
 | `pnpm db:push` | Push schema to database |
