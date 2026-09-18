@@ -25,6 +25,10 @@ import FloatingToolbar from "./plugins/floating-toolbar";
 import WordCountPlugin from "./plugins/word-count-plugin";
 import { ExportBridge, type ExportFunctions } from "./plugins/export-plugin";
 import SeedNotesPlugin from "./plugins/seed-notes-plugin";
+import {
+  RegenerateBridge,
+  type RegenerateFunctions,
+} from "./plugins/regenerate-notes-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/features/comments/components/comments";
 import Loader from "@/components/shared/loader";
@@ -46,6 +50,7 @@ export function Editor({
   onWordCountChange,
   scrollToHeadingRef,
   exportRef,
+  regenerateRef,
   documentTitle,
   discussionOpen,
   onDiscussionOpenChange,
@@ -56,6 +61,7 @@ export function Editor({
   onWordCountChange?: (wordCount: number) => void;
   scrollToHeadingRef: React.MutableRefObject<((key: string) => void) | null>;
   exportRef?: React.MutableRefObject<ExportFunctions | null>;
+  regenerateRef?: React.MutableRefObject<RegenerateFunctions | null>;
   documentTitle?: string;
   discussionOpen?: boolean;
   onDiscussionOpenChange?: (open: boolean) => void;
@@ -82,6 +88,7 @@ export function Editor({
       />
       {onWordCountChange && <WordCountPlugin onChange={onWordCountChange} />}
       {exportRef && <ExportBridge title={documentTitle || "document"} exportRef={exportRef} />}
+      {regenerateRef && <RegenerateBridge regenerateRef={regenerateRef} />}
       {/* Only mounted once `status` confirms the Yjs doc has actually
           synced — checking emptiness before that would race against the
           real synced state (see seed-notes-plugin.tsx). */}
