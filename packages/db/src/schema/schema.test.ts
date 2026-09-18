@@ -14,6 +14,7 @@ import {
   activityLog,
   ingestionJob,
   sourceContent,
+  documentChunk,
   rateLimitBucket,
 } from "./index";
 
@@ -196,6 +197,39 @@ describe("sourceContent", () => {
     );
     expect(jobIdx?.config.unique).toBe(true);
     expect(docIdx?.config.unique).toBe(true);
+  });
+});
+
+describe("documentChunk", () => {
+  it("cascades delete when its document is deleted", () => {
+    // The P0-17 retention pattern: deleting the document (normal user
+    // action) purges its chunks too, same as sourceContent, with no
+    // independent TTL/cleanup job.
+    expect(foreignKey(documentChunk, "document_id").onDelete).toBe("cascade");
+  });
+
+  it("requires a non-null embedding with the dimension Gemini's embedding model produces", () => {
+    const { columns } = getTableConfig(documentChunk);
+    const embedding = columns.find((c) => c.name === "embedding");
+    expect(embedding?.notNull).toBe(true);
+    // Must match GEMINI_EMBEDDING_DIMENSIONS in apps/web/src/lib/gemini.
+    expect(
+      (embedding as unknown as { dimensions?: number })?.dimensions
+    ).toBe(768);
+  });
+
+  it("only allows one chunk per (document, chunkIndex) pair", () => {
+    const { indexes } = getTableConfig(documentChunk);
+    const uniqueIdx = indexes.find(
+      (i) => i.config.name === "document_chunk_document_id_chunk_index_idx"
+    );
+    expect(uniqueIdx?.config.unique).toBe(true);
+  });
+
+  it("has a documentId index for scoping retrieval to one document", () => {
+    const { indexes } = getTableConfig(documentChunk);
+    const names = indexes.map((i) => i.config.name);
+    expect(names).toContain("document_chunk_document_id_idx");
   });
 });
 

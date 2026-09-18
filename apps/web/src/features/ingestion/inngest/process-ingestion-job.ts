@@ -2,7 +2,15 @@ import { NonRetriableError } from "inngest";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 import { updateTag, revalidatePath } from "next/cache";
-import { db, ingestionJob, sourceContent, document, activityLog, user } from "@collabnow/db";
+import {
+  db,
+  ingestionJob,
+  sourceContent,
+  document,
+  documentChunk,
+  activityLog,
+  user,
+} from "@collabnow/db";
 
 import { inngest } from "@/lib/inngest/client";
 import { liveblocks } from "@/lib/liveblocks/client";
@@ -26,6 +34,7 @@ import {
 } from "../lib/source-validator";
 import { generateNotes } from "../lib/notes-generator";
 import { deriveDocumentTitle } from "../lib/derive-document-title";
+import { embedSourceChunks } from "../lib/chunk-embedder";
 import type { SourceType } from "../lib/source-detector";
 
 /**
@@ -38,9 +47,11 @@ import type { SourceType } from "../lib/source-detector";
  *
  * Scope note: this function's last step marks the job "ready" once the
  * source text is fetched, validated, persisted to `source_content`,
- * (P1-6) Gemini-generated notes are persisted alongside it, and (P1-7) a
+ * (P1-6) Gemini-generated notes are persisted alongside it, (P1-7) a
  * real `document` row + Liveblocks room exist and are linked back via
- * `source_content.documentId`. The new document starts with *empty* room
+ * `source_content.documentId`, and (P2-3) the source text is chunked and
+ * embedded into `document_chunk` for the future "Ask about this" retrieval
+ * feature (P2-4). The new document starts with *empty* room
  * content, same as a manually-created one — the generated notes are
  * already durably stored in `source_content.generatedNotes`, and the
  * editor fills the room in client-side the first time the document is
@@ -64,7 +75,9 @@ import type { SourceType } from "../lib/source-detector";
  * failure modes (missing config, empty response, rate limits, possible
  * safety-filter blocks) aren't well-characterized yet, so any failure there
  * is just left to propagate and retry via the same `retries: 4`/`onFailure`
- * plumbing everything else already goes through.
+ * plumbing everything else already goes through. The `chunk-and-embed`
+ * step (P2-3) makes the same choice for the same reason — it's also a
+ * Gemini call (`embedTexts`, via `embedSourceChunks`).
  */
 /**
  * Runs once Inngest gives up on a run — either every retry was exhausted,
@@ -269,6 +282,48 @@ export const processIngestionJob = inngest.createFunction(
       revalidatePath("/dashboard");
 
       return newRoomId;
+    });
+
+    await step.run("chunk-and-embed", async () => {
+      // Re-reads documentId/rawText from source_content rather than
+      // closing over `source`/`roomId` above — this step only cares about
+      // what save-document just persisted, and reading it back is the
+      // same idempotent-check pattern every other step here already uses.
+      const [sourceRow] = await db
+        .select({
+          documentId: sourceContent.documentId,
+          rawText: sourceContent.rawText,
+        })
+        .from(sourceContent)
+        .where(eq(sourceContent.ingestionJobId, jobId))
+        .limit(1);
+
+      // Should be impossible — save-document, immediately above, always
+      // sets this before returning — but with nothing to link chunks to,
+      // there's nothing this step can do.
+      if (!sourceRow?.documentId) return;
+
+      // Idempotent, and avoids paying for a second batch of Gemini
+      // embedding calls on retry, same rationale as generate-notes's
+      // existence check.
+      const [existingChunk] = await db
+        .select({ id: documentChunk.id })
+        .from(documentChunk)
+        .where(eq(documentChunk.documentId, sourceRow.documentId))
+        .limit(1);
+      if (existingChunk) return;
+
+      const embedded = await embedSourceChunks(sourceRow.rawText);
+      if (embedded.length === 0) return;
+
+      await db.insert(documentChunk).values(
+        embedded.map((chunk, i) => ({
+          documentId: sourceRow.documentId!,
+          chunkIndex: i,
+          content: chunk.content,
+          embedding: chunk.embedding,
+        }))
+      );
     });
 
     await step.run("mark-ready", async () => {
