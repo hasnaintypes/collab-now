@@ -94,6 +94,7 @@ const { generateNotesMock } = vi.hoisted(() => ({
 }));
 vi.mock("../lib/notes-generator", () => ({
   generateNotes: generateNotesMock,
+  DEFAULT_NOTE_STYLE: "bullet-outline",
 }));
 
 const { TranscriptFetchError } = await import("../lib/youtube-transcript");
@@ -180,6 +181,7 @@ describe("processIngestionJob", () => {
     expect(generateNotesMock).toHaveBeenCalledWith({
       text: "hello world",
       language: "en",
+      style: "bullet-outline",
     });
 
     // Room created with a title derived from the notes' first heading
@@ -210,7 +212,10 @@ describe("processIngestionJob", () => {
     );
     expect(updateSet).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ generatedNotes: "# My Notes\n- point one" })
+      expect.objectContaining({
+        generatedNotes: "# My Notes\n- point one",
+        noteStyle: "bullet-outline",
+      })
     );
     expect(updateSet).toHaveBeenNthCalledWith(
       4,

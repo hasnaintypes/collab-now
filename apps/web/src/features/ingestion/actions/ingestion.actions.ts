@@ -18,9 +18,12 @@ import {
 
 import { ingestionJobRequested } from "../inngest/events";
 import { detectSourceType } from "../lib/source-detector";
+import { generateNotes, NOTE_STYLE_LABELS } from "../lib/notes-generator";
+import type { SupportedLanguage } from "../lib/source-validator";
 import type {
   IngestionJobStatus,
   IngestionJobStatusView,
+  NoteStyle,
   SourceType,
 } from "../types";
 
@@ -200,7 +203,7 @@ export const getGeneratedNotesForDocument = async ({
   roomId,
 }: {
   roomId: string;
-}): Promise<ActionResult<{ notes: string } | null>> => {
+}): Promise<ActionResult<{ notes: string; noteStyle: NoteStyle } | null>> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     return actionError("You must be signed in to view this document.");
@@ -211,6 +214,7 @@ export const getGeneratedNotesForDocument = async ({
       .select({
         workspaceId: document.workspaceId,
         generatedNotes: sourceContent.generatedNotes,
+        noteStyle: sourceContent.noteStyle,
       })
       .from(document)
       .innerJoin(sourceContent, eq(sourceContent.documentId, document.id))
@@ -223,6 +227,79 @@ export const getGeneratedNotesForDocument = async ({
 
     await requireWorkspaceMembership(row.workspaceId, session.user.id);
 
-    return { notes: row.generatedNotes };
+    return { notes: row.generatedNotes, noteStyle: row.noteStyle as NoteStyle };
   }, "Failed to load this document's generated notes.");
+};
+
+/**
+ * Regenerates a document's notes in a different style (P2-1 / PRD FR-9) —
+ * the backend half of "Style picker + regenerate UI" (P2-2, which owns the
+ * dropdown/trigger and replacing the editor's content; this action only
+ * does the generation + persistence). Reuses this document's already-
+ * stored `source_content.rawText`/`sourceLanguage` — nothing here ever
+ * re-fetches the source URL or re-runs extraction, satisfying FR-9's
+ * "switching style never re-fetches" requirement by construction: there's
+ * no code path to a fetcher anywhere in this function.
+ */
+export const regenerateNotes = async ({
+  roomId,
+  style,
+}: {
+  roomId: string;
+  style: NoteStyle;
+}): Promise<ActionResult<{ notes: string }>> => {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    return actionError("You must be signed in to regenerate notes.");
+  }
+
+  if (!(style in NOTE_STYLE_LABELS)) {
+    return actionError("That's not a note style this app supports.");
+  }
+
+  const rateLimit = await checkRateLimit(
+    RATE_LIMITS.notesRegenerate,
+    session.user.id
+  );
+  if (!rateLimit.success) {
+    return actionError(
+      `You're regenerating notes too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
+      rateLimit.retryAfterSeconds
+    );
+  }
+
+  return safeAction(async () => {
+    const [row] = await db
+      .select({
+        id: sourceContent.id,
+        workspaceId: document.workspaceId,
+        rawText: sourceContent.rawText,
+        sourceLanguage: sourceContent.sourceLanguage,
+      })
+      .from(document)
+      .innerJoin(sourceContent, eq(sourceContent.documentId, document.id))
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
+    if (!row) {
+      throw new ActionError(
+        "This document doesn't have any source content to regenerate notes from."
+      );
+    }
+
+    await requireWorkspaceMembership(row.workspaceId, session.user.id);
+
+    const notes = await generateNotes({
+      text: row.rawText,
+      language: row.sourceLanguage as SupportedLanguage,
+      style,
+    });
+
+    await db
+      .update(sourceContent)
+      .set({ generatedNotes: notes, noteStyle: style, updatedAt: new Date() })
+      .where(eq(sourceContent.id, row.id));
+
+    return { notes };
+  }, "Failed to regenerate notes. Please try again.");
 };

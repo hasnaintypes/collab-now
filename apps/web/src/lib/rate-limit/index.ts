@@ -132,4 +132,15 @@ export const RATE_LIMITS = {
     limit: 10,
     windowMs: 60 * 60 * 1000, // 10 per hour
   },
+  /**
+   * `regenerateNotes` — same file (P2-1). Also calls Gemini, but reuses
+   * already-stored source text (no re-fetch/re-extract) — lighter than a
+   * full `enqueueIngestionJob`, so a somewhat higher allowance than that
+   * one, but still nowhere near a plain insert's limit.
+   */
+  notesRegenerate: {
+    name: "notes-regenerate",
+    limit: 20,
+    windowMs: 60 * 60 * 1000, // 20 per hour
+  },
 } as const satisfies Record<string, RateLimitConfig>;

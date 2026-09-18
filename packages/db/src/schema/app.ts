@@ -194,8 +194,8 @@ export const sourceContent = pgTable(
     /** "en" | "hi" | "ur" — detected source language, per PRD FR-6. */
     sourceLanguage: text("source_language").notNull(),
     /**
-     * P1-6 / PRD FR-8: the single-style (Bullet/Outline Summary) English
-     * notes Gemini generated from `rawText`. Nullable because it's only
+     * P1-6 / PRD FR-8: the English notes Gemini generated from `rawText`,
+     * in whichever style `noteStyle` records. Nullable because it's only
      * filled in once that step of the ingestion job succeeds — a job can
      * be `"ready"` with `rawText` persisted but this still null if it's
      * mid-pipeline. Kept here rather than on `ingestionJob` since this
@@ -203,6 +203,20 @@ export const sourceContent = pgTable(
      * already carries `documentId`, the other field P1-7 fills in later.
      */
     generatedNotes: text("generated_notes"),
+    /**
+     * P2-1 / PRD FR-9, FR-11: which of the 5 note styles `generatedNotes`
+     * is currently in — see `NoteStyle` in
+     * `features/ingestion/lib/notes-generator.ts` for the literal values.
+     * Defaults to the MVP's single style (P1-6) both for new rows created
+     * before a style is chosen and to backfill existing rows on migration;
+     * plain `text` rather than a DB enum, matching `sourceType`/`status`
+     * elsewhere in this schema — validated at the app layer, not here.
+     * Regenerating in a different style (P2-1's `regenerateNotes` action)
+     * overwrites both this and `generatedNotes` together, reusing this
+     * row's own `rawText`/`sourceLanguage` rather than re-fetching or
+     * re-extracting anything, per FR-9.
+     */
+    noteStyle: text("note_style").notNull().default("bullet-outline"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
