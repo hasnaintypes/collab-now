@@ -3,8 +3,10 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   uniqueIndex,
   index,
+  vector,
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
 import { user } from "./auth";
@@ -215,6 +217,59 @@ export const sourceContent = pgTable(
     // jobs that haven't produced a document yet, are allowed — Postgres
     // unique indexes treat each NULL as distinct).
     uniqueIndex("source_content_document_id_idx").on(table.documentId),
+  ]
+);
+
+// ── Document Chunk ───────────────────────────────────────────
+// P2-3 / PRD §6.10, §9, FR-13: chunked `sourceContent.rawText` + a pgvector
+// embedding per chunk, used by the future P2-4 "Ask about this" retrieval
+// endpoint to answer questions from a document's own source material only.
+// FK is to `document.id` (not `sourceContent.id`) per PRD §9's stated data
+// model, and cascades so deleting the document — the normal user action —
+// purges its chunks too, same P0-17 retention pattern as `sourceContent`
+// (there's no independent TTL/cleanup job for either table).
+//
+// `embedding`'s `dimensions: 768` must match `GEMINI_EMBEDDING_DIMENSIONS`
+// in `apps/web/src/lib/gemini/index.ts` — see that constant's doc comment
+// for why 768 was chosen. A vector similarity index (e.g. HNSW with
+// `vector_cosine_ops`) is deliberately not added yet: P2-4 hasn't been
+// built, so there's no real query shape yet to validate an index choice
+// against, and pgvector index tuning is easier to get right once one
+// exists than to guess at now.
+
+export const documentChunk = pgTable(
+  "document_chunk",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => document.id, { onDelete: "cascade" }),
+    /**
+     * 0-based position of this chunk within its document's source text —
+     * not used for retrieval ranking (that's the embedding's job), just
+     * for deterministic ordering (e.g. reconstructing reading order) and
+     * as half of the uniqueness constraint below that makes the embedding
+     * step idempotent on Inngest retry.
+     */
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: 768 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    // Every chat/RAG retrieval query (P2-4) scopes to one document — see
+    // PRD §10's isolation requirement — so this is the index that query
+    // actually needs.
+    index("document_chunk_document_id_idx").on(table.documentId),
+    // One row per (document, position) — lets the embedding Inngest step
+    // check "have I already inserted chunk N for this document?" the same
+    // idempotent-retry way every other step in that pipeline already does.
+    uniqueIndex("document_chunk_document_id_chunk_index_idx").on(
+      table.documentId,
+      table.chunkIndex
+    ),
   ]
 );
 
