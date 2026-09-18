@@ -22,14 +22,22 @@ export const MAX_VIDEO_DURATION_SECONDS = 60 * 60;
 /** Article cap (PRD §6.8): 20,000 words. */
 export const MAX_ARTICLE_WORD_COUNT = 20_000;
 
+/** The only source languages CollabNow accepts (PRD §6.8 / FR-6), in the
+ * two-letter form `source_content.sourceLanguage` (P1-1) stores them in. */
+export type SupportedLanguage = "en" | "hi" | "ur";
+
 /**
- * ISO 639-3 codes (franc's output format) for the only source languages
- * CollabNow accepts (PRD §6.8 / FR-6). `franc` returns `"und"` when it can't
- * confidently determine a language (e.g. text too short) — treated as
- * unsupported rather than assumed-allowed, since we can't confirm it's one
- * of these three.
+ * Maps franc's ISO 639-3 output to the two-letter codes this codebase
+ * otherwise uses. `franc` returns `"und"` when it can't confidently
+ * determine a language (e.g. text too short) — absent from this map, and
+ * so treated as unsupported rather than assumed-allowed, since we can't
+ * confirm it's one of these three.
  */
-const ALLOWED_LANGUAGES = new Set(["eng", "hin", "urd"]);
+const LANGUAGE_CODE_MAP: Record<string, SupportedLanguage> = {
+  eng: "en",
+  hin: "hi",
+  urd: "ur",
+};
 
 /**
  * Domain-level reasons a source can fail validation. All three are
@@ -64,24 +72,26 @@ function formatMinutes(seconds: number): string {
 
 /**
  * Detects the language of `text` from its content (not from any metadata
- * the caller might have on hand) and reports whether it's one of the
- * languages CollabNow accepts.
+ * the caller might have on hand) and returns the two-letter code if it's
+ * one of the languages CollabNow accepts, or `null` otherwise.
  */
-function isSupportedLanguage(text: string): boolean {
+function detectSupportedLanguage(text: string): SupportedLanguage | null {
   const detected = franc(text, { minLength: 10 });
-  return ALLOWED_LANGUAGES.has(detected);
+  return LANGUAGE_CODE_MAP[detected] ?? null;
 }
 
 /**
  * Validates a fetched YouTube transcript against the 60-minute cap and the
  * English/Hindi/Urdu-only language restriction (FR-5, FR-6). Throws
  * `SourceValidationError` on the first failing check rather than any
- * further processing (e.g. Gemini generation) beginning.
+ * further processing (e.g. Gemini generation) beginning. On success,
+ * returns the detected source language — P1-5's job pipeline persists this
+ * directly to `source_content.sourceLanguage` rather than re-detecting it.
  */
 export function validateYoutubeSource(source: {
   text: string;
   durationSeconds: number;
-}): void {
+}): SupportedLanguage {
   if (source.durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
     throw new SourceValidationError(
       `This video is about ${formatMinutes(source.durationSeconds)} long, which is over the 60-minute limit for generating notes.`,
@@ -89,21 +99,28 @@ export function validateYoutubeSource(source: {
     );
   }
 
-  if (!isSupportedLanguage(source.text)) {
+  const language = detectSupportedLanguage(source.text);
+  if (!language) {
     throw new SourceValidationError(
       "This video's language isn't supported — notes can only be generated from English, Hindi, or Urdu content.",
       "unsupported-language"
     );
   }
+
+  return language;
 }
 
 /**
  * Validates extracted article text against the 20,000-word cap and the
  * English/Hindi/Urdu-only language restriction (FR-5, FR-6). Throws
  * `SourceValidationError` on the first failing check rather than any
- * further processing (e.g. Gemini generation) beginning.
+ * further processing (e.g. Gemini generation) beginning. On success,
+ * returns the detected source language — P1-5's job pipeline persists this
+ * directly to `source_content.sourceLanguage` rather than re-detecting it.
  */
-export function validateArticleSource(source: { text: string }): void {
+export function validateArticleSource(source: {
+  text: string;
+}): SupportedLanguage {
   const wordCount = countWords(source.text);
   if (wordCount > MAX_ARTICLE_WORD_COUNT) {
     throw new SourceValidationError(
@@ -112,10 +129,13 @@ export function validateArticleSource(source: { text: string }): void {
     );
   }
 
-  if (!isSupportedLanguage(source.text)) {
+  const language = detectSupportedLanguage(source.text);
+  if (!language) {
     throw new SourceValidationError(
       "This article's language isn't supported — notes can only be generated from English, Hindi, or Urdu content.",
       "unsupported-language"
     );
   }
+
+  return language;
 }

@@ -180,6 +180,12 @@ describe("sourceContent", () => {
     expect(documentId?.notNull).toBe(false);
   });
 
+  it("allows generatedNotes to be null until the P1-6 generation step succeeds", () => {
+    const { columns } = getTableConfig(sourceContent);
+    const generatedNotes = columns.find((c) => c.name === "generated_notes");
+    expect(generatedNotes?.notNull).toBe(false);
+  });
+
   it("only allows one source_content row per ingestion job and per document", () => {
     const { indexes } = getTableConfig(sourceContent);
     const jobIdx = indexes.find(

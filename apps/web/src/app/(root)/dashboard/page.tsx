@@ -13,6 +13,7 @@ import {
 } from "@/features/workspace/actions/workspace.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import AddDocumentBtn from "@/features/documents/components/add-document-btn";
+import NewFromUrlDialog from "@/features/ingestion/components/new-from-url-dialog";
 import DocumentsSection from "@/features/documents/components/documents-section";
 import MobileSidebar from "@/features/workspace/components/mobile-sidebar";
 import UserButton from "@/components/shared/user-button";
@@ -104,7 +105,10 @@ export default async function DashboardPage({
                           ? "Archive"
                           : "Document Studio"}
                 </h1>
-                <AddDocumentBtn userId={user.id} email={user.email} workspaceId={workspaceData.id} />
+                <div className="flex items-center gap-2">
+                  <NewFromUrlDialog workspaceId={workspaceData.id} />
+                  <AddDocumentBtn userId={user.id} email={user.email} workspaceId={workspaceData.id} />
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <p className="max-w-md text-lg leading-relaxed text-muted-foreground">

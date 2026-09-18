@@ -193,6 +193,16 @@ export const sourceContent = pgTable(
     rawText: text("raw_text").notNull(),
     /** "en" | "hi" | "ur" — detected source language, per PRD FR-6. */
     sourceLanguage: text("source_language").notNull(),
+    /**
+     * P1-6 / PRD FR-8: the single-style (Bullet/Outline Summary) English
+     * notes Gemini generated from `rawText`. Nullable because it's only
+     * filled in once that step of the ingestion job succeeds — a job can
+     * be `"ready"` with `rawText` persisted but this still null if it's
+     * mid-pipeline. Kept here rather than on `ingestionJob` since this
+     * table is already the one-row-per-job home for a job's content, and
+     * already carries `documentId`, the other field P1-7 fills in later.
+     */
+    generatedNotes: text("generated_notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

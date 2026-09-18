@@ -46,31 +46,31 @@ function repeatToWordCount(paragraph: string, targetWords: number): string {
 }
 
 describe("validateYoutubeSource", () => {
-  it("passes for an English transcript within the duration cap", () => {
-    expect(() =>
+  it("passes for an English transcript within the duration cap and returns \"en\"", () => {
+    expect(
       validateYoutubeSource({
         text: ENGLISH_PARAGRAPH,
         durationSeconds: MAX_VIDEO_DURATION_SECONDS - 1,
       })
-    ).not.toThrow();
+    ).toBe("en");
   });
 
-  it("passes for a Hindi transcript within the duration cap", () => {
-    expect(() =>
+  it("passes for a Hindi transcript within the duration cap and returns \"hi\"", () => {
+    expect(
       validateYoutubeSource({
         text: HINDI_PARAGRAPH,
         durationSeconds: 600,
       })
-    ).not.toThrow();
+    ).toBe("hi");
   });
 
-  it("passes for an Urdu transcript within the duration cap", () => {
-    expect(() =>
+  it("passes for an Urdu transcript within the duration cap and returns \"ur\"", () => {
+    expect(
       validateYoutubeSource({
         text: URDU_PARAGRAPH,
         durationSeconds: 600,
       })
-    ).not.toThrow();
+    ).toBe("ur");
   });
 
   it("rejects a video over the 60-minute cap with a specific message, checked before language", () => {
@@ -111,9 +111,9 @@ describe("validateYoutubeSource", () => {
 });
 
 describe("validateArticleSource", () => {
-  it("passes for an English article at exactly the word cap", () => {
+  it("passes for an English article at exactly the word cap and returns \"en\"", () => {
     const text = repeatToWordCount(ENGLISH_PARAGRAPH, MAX_ARTICLE_WORD_COUNT);
-    expect(() => validateArticleSource({ text })).not.toThrow();
+    expect(validateArticleSource({ text })).toBe("en");
   });
 
   it("rejects an article one word over the cap with a specific message", () => {
@@ -137,16 +137,12 @@ describe("validateArticleSource", () => {
     );
   });
 
-  it("passes for a Hindi article within the word cap", () => {
-    expect(() =>
-      validateArticleSource({ text: HINDI_PARAGRAPH })
-    ).not.toThrow();
+  it("passes for a Hindi article within the word cap and returns \"hi\"", () => {
+    expect(validateArticleSource({ text: HINDI_PARAGRAPH })).toBe("hi");
   });
 
-  it("passes for an Urdu article within the word cap", () => {
-    expect(() =>
-      validateArticleSource({ text: URDU_PARAGRAPH })
-    ).not.toThrow();
+  it("passes for an Urdu article within the word cap and returns \"ur\"", () => {
+    expect(validateArticleSource({ text: URDU_PARAGRAPH })).toBe("ur");
   });
 
   it("rejects an article whose language isn't English, Hindi, or Urdu, with a specific message", () => {
