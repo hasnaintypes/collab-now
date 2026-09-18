@@ -39,9 +39,13 @@ vi.mock("@collabnow/db", () => ({
     workspaceId: "ingestion_job.workspace_id",
   },
   sourceContent: {
+    id: "source_content.id",
     ingestionJobId: "source_content.ingestion_job_id",
     documentId: "source_content.document_id",
+    rawText: "source_content.raw_text",
+    sourceLanguage: "source_content.source_language",
     generatedNotes: "source_content.generated_notes",
+    noteStyle: "source_content.note_style",
   },
   document: {
     id: "document.id",
@@ -76,6 +80,11 @@ vi.mock("@/lib/rate-limit", () => ({
       limit: 10,
       windowMs: 60 * 60 * 1000,
     },
+    notesRegenerate: {
+      name: "notes-regenerate",
+      limit: 20,
+      windowMs: 60 * 60 * 1000,
+    },
   },
 }));
 
@@ -84,8 +93,26 @@ vi.mock("@/lib/inngest/client", () => ({
   inngest: { send: inngestSendMock },
 }));
 
-const { enqueueIngestionJob, getIngestionJobStatus, getGeneratedNotesForDocument } =
-  await import("./ingestion.actions");
+const { generateNotesMock } = vi.hoisted(() => ({
+  generateNotesMock: vi.fn(),
+}));
+vi.mock("../lib/notes-generator", () => ({
+  generateNotes: generateNotesMock,
+  NOTE_STYLE_LABELS: {
+    "bullet-outline": "Bullet / Outline Summary",
+    cornell: "Cornell Notes",
+    mindmap: "Mind-Map Outline",
+    "qa-flashcards": "Q&A / Flashcards",
+    "executive-summary": "Executive Summary (TL;DR)",
+  },
+}));
+
+const {
+  enqueueIngestionJob,
+  getIngestionJobStatus,
+  getGeneratedNotesForDocument,
+  regenerateNotes,
+} = await import("./ingestion.actions");
 
 beforeEach(() => {
   dbMock.select.mockReset();
@@ -97,6 +124,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ success: true, limit: 10, remaining: 9 });
   inngestSendMock.mockReset().mockResolvedValue(undefined);
+  generateNotesMock.mockReset().mockResolvedValue("regenerated notes");
 });
 
 describe("enqueueIngestionJob", () => {
@@ -385,11 +413,17 @@ describe("getGeneratedNotesForDocument", () => {
     });
   });
 
-  it("returns the generated notes for a workspace member", async () => {
+  it("returns the generated notes and style for a workspace member", async () => {
     getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
     dbMock.select
       .mockReturnValueOnce(
-        selectChain([{ workspaceId: "ws-1", generatedNotes: "# Notes\n- a" }])
+        selectChain([
+          {
+            workspaceId: "ws-1",
+            generatedNotes: "# Notes\n- a",
+            noteStyle: "cornell",
+          },
+        ])
       )
       .mockReturnValueOnce(selectChain([{ id: "member-1" }]));
 
@@ -397,7 +431,126 @@ describe("getGeneratedNotesForDocument", () => {
 
     expect(result).toEqual({
       success: true,
-      data: { notes: "# Notes\n- a" },
+      data: { notes: "# Notes\n- a", noteStyle: "cornell" },
     });
+  });
+});
+
+describe("regenerateNotes", () => {
+  const params = { roomId: "room-1", style: "cornell" as const };
+
+  it("rejects when the caller isn't signed in", async () => {
+    getSessionMock.mockResolvedValueOnce(null);
+
+    const result = await regenerateNotes(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "You must be signed in to regenerate notes.",
+    });
+    expect(generateNotesMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a style this app doesn't support", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+
+    const result = await regenerateNotes({
+      roomId: "room-1",
+      style: "haiku" as never,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "That's not a note style this app supports.",
+    });
+    expect(generateNotesMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects when rate limited, surfacing retryAfterSeconds", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    checkRateLimitMock.mockResolvedValueOnce({
+      success: false,
+      limit: 20,
+      remaining: 0,
+      retryAfterSeconds: 30,
+    });
+
+    const result = await regenerateNotes(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "You're regenerating notes too quickly. Try again in 30 seconds.",
+      retryAfterSeconds: 30,
+    });
+    expect(generateNotesMock).not.toHaveBeenCalled();
+  });
+
+  it("fails when the document has no source content to regenerate from", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(selectChain([])); // inner join finds nothing
+
+    const result = await regenerateNotes(params);
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "This document doesn't have any source content to regenerate notes from.",
+    });
+    expect(generateNotesMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the caller isn't a member of the document's workspace", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(
+        selectChain([
+          {
+            id: "sc-1",
+            workspaceId: "ws-1",
+            rawText: "raw text",
+            sourceLanguage: "en",
+          },
+        ])
+      )
+      .mockReturnValueOnce(selectChain([])); // no membership row
+
+    const result = await regenerateNotes(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "You don't have access to this workspace.",
+    });
+    expect(generateNotesMock).not.toHaveBeenCalled();
+  });
+
+  it("regenerates from the already-stored source text and persists the new style, without re-fetching anything", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(
+        selectChain([
+          {
+            id: "sc-1",
+            workspaceId: "ws-1",
+            rawText: "raw text",
+            sourceLanguage: "en",
+          },
+        ])
+      )
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]));
+
+    const result = await regenerateNotes(params);
+
+    expect(result).toEqual({ success: true, data: { notes: "regenerated notes" } });
+    expect(generateNotesMock).toHaveBeenCalledWith({
+      text: "raw text",
+      language: "en",
+      style: "cornell",
+    });
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generatedNotes: "regenerated notes",
+        noteStyle: "cornell",
+      })
+    );
   });
 });

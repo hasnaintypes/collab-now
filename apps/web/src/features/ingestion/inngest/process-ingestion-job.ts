@@ -24,7 +24,7 @@ import {
   SourceValidationError,
   type SupportedLanguage,
 } from "../lib/source-validator";
-import { generateNotes } from "../lib/notes-generator";
+import { generateNotes, DEFAULT_NOTE_STYLE } from "../lib/notes-generator";
 import { deriveDocumentTitle } from "../lib/derive-document-title";
 import type { SourceType } from "../lib/source-detector";
 
@@ -187,11 +187,24 @@ export const processIngestionJob = inngest.createFunction(
 
       if (existing?.generatedNotes) return existing.generatedNotes;
 
-      const generated = await generateNotes({ text: source.text, language });
+      // Initial generation always uses the MVP default style — regenerating
+      // in one of P2-1's other styles for an already-created document is a
+      // separate, later operation (`regenerateNotes`, in
+      // `features/ingestion/actions/ingestion.actions.ts`), not something
+      // this job ever does itself.
+      const generated = await generateNotes({
+        text: source.text,
+        language,
+        style: DEFAULT_NOTE_STYLE,
+      });
 
       await db
         .update(sourceContent)
-        .set({ generatedNotes: generated, updatedAt: new Date() })
+        .set({
+          generatedNotes: generated,
+          noteStyle: DEFAULT_NOTE_STYLE,
+          updatedAt: new Date(),
+        })
         .where(eq(sourceContent.ingestionJobId, jobId));
 
       return generated;

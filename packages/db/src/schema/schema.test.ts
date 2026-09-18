@@ -186,6 +186,13 @@ describe("sourceContent", () => {
     expect(generatedNotes?.notNull).toBe(false);
   });
 
+  it("defaults noteStyle to the MVP's single style", () => {
+    const { columns } = getTableConfig(sourceContent);
+    const noteStyle = columns.find((c) => c.name === "note_style");
+    expect(noteStyle?.notNull).toBe(true);
+    expect(noteStyle?.default).toBe("bullet-outline");
+  });
+
   it("only allows one source_content row per ingestion job and per document", () => {
     const { indexes } = getTableConfig(sourceContent);
     const jobIdx = indexes.find(

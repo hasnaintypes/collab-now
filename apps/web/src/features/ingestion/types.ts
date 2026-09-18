@@ -1,6 +1,7 @@
 import type { SourceType } from "./lib/source-detector";
+import type { NoteStyle } from "./lib/notes-generator";
 
-export type { SourceType };
+export type { SourceType, NoteStyle };
 
 /** Mirrors `ingestionJob.status` (`packages/db/src/schema/app.ts`, P1-1). */
 export type IngestionJobStatus = "queued" | "processing" | "ready" | "failed";
