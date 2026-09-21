@@ -7,6 +7,7 @@ import Loader from "@/components/shared/loader";
 import { Editor } from "./editor";
 import type { HeadingEntry } from "./plugins/heading-outline-plugin";
 import type { ExportFunctions } from "./plugins/export-plugin";
+import type { RegenerateFunctions } from "./plugins/regenerate-notes-plugin";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import DocumentNavbar from "./document-navbar";
 import DocumentSidebar, { DocumentSidebarContent } from "./document-sidebar";
@@ -19,6 +20,7 @@ export default function CollaborativeRoom({
   users,
   currentUserType,
   currentUser,
+  noteStyle,
 }: CollaborativeRoomProps) {
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [wordCount, setWordCount] = useState(0);
@@ -28,6 +30,7 @@ export default function CollaborativeRoom({
 
   const scrollToHeadingRef = useRef<((key: string) => void) | null>(null);
   const exportRef = useRef<ExportFunctions | null>(null);
+  const regenerateRef = useRef<RegenerateFunctions | null>(null);
 
   const handleHeadingsChange = useCallback((h: HeadingEntry[]) => {
     setHeadings(h);
@@ -64,6 +67,8 @@ export default function CollaborativeRoom({
             currentUserType={currentUserType}
             currentUser={currentUser}
             exportRef={exportRef}
+            noteStyle={noteStyle}
+            regenerateRef={regenerateRef}
           />
 
           {/* Desktop sidebar */}
@@ -99,6 +104,7 @@ export default function CollaborativeRoom({
               onWordCountChange={handleWordCountChange}
               scrollToHeadingRef={scrollToHeadingRef}
               exportRef={exportRef}
+              regenerateRef={regenerateRef}
               documentTitle={roomMetadata.title}
               discussionOpen={discussionOpen}
               onDiscussionOpenChange={setDiscussionOpen}

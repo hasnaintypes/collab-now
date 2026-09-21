@@ -7,7 +7,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import ActiveCollaborators from "@/features/documents/components/active-collaborators";
 import ShareDialog from "@/features/documents/components/share-dialog";
 import UserButton from "@/components/shared/user-button";
+import NoteStylePicker from "@/features/ingestion/components/note-style-picker";
+import type { NoteStyle } from "@/features/ingestion/types";
 import type { ExportFunctions } from "./plugins/export-plugin";
+import type { RegenerateFunctions } from "./plugins/regenerate-notes-plugin";
 
 export default function DocumentNavbar({
   roomId,
@@ -16,6 +19,8 @@ export default function DocumentNavbar({
   currentUserType,
   currentUser,
   exportRef,
+  noteStyle,
+  regenerateRef,
 }: {
   roomId: string;
   roomMetadata: RoomMetadata;
@@ -23,6 +28,9 @@ export default function DocumentNavbar({
   currentUserType: UserType;
   currentUser: MinimalUser;
   exportRef: React.MutableRefObject<ExportFunctions | null>;
+  /** `null` for a manually-created document — hides the style picker. */
+  noteStyle: NoteStyle | null;
+  regenerateRef: React.MutableRefObject<RegenerateFunctions | null>;
 }) {
   return (
     <nav className="fixed top-0 w-full z-50 flex items-center justify-between px-4 md:px-8 h-16 bg-background/80 backdrop-blur-md border-b border-border/50 shadow-sm">
@@ -40,6 +48,15 @@ export default function DocumentNavbar({
         <div className="mr-1 md:mr-2 hidden sm:block">
           <ActiveCollaborators />
         </div>
+
+        {/* Notes style — only for documents generated from a URL (P2-2) */}
+        {noteStyle && (
+          <NoteStylePicker
+            roomId={roomId}
+            initialStyle={noteStyle}
+            regenerateRef={regenerateRef}
+          />
+        )}
 
         {/* Export */}
         <Popover>
