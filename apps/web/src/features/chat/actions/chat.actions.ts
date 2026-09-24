@@ -50,6 +50,48 @@ async function requireWorkspaceMembership(
   }
 }
 
+/**
+ * Cheap existence check backing P2-5's "only show the chat panel on
+ * documents with indexed source content" requirement — the UI (`documents/
+ * [id]/page.tsx`) calls this instead of `askAboutDocument` (which does a
+ * full embedding + generation call, far too expensive just to decide
+ * whether to render a button) or `getGeneratedNotesForDocument` (which
+ * fetches the whole notes body). Only touches `id` columns via the same
+ * `document_chunk_document_id_idx` index the real retrieval query uses.
+ */
+export const getChatAvailability = async ({
+  roomId,
+}: {
+  roomId: string;
+}): Promise<ActionResult<{ available: boolean }>> => {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    return actionError("You must be signed in to view this document.");
+  }
+
+  return safeAction(async () => {
+    const [row] = await db
+      .select({ id: document.id, workspaceId: document.workspaceId })
+      .from(document)
+      .where(eq(document.roomId, roomId))
+      .limit(1);
+
+    if (!row) {
+      return { available: false };
+    }
+
+    await requireWorkspaceMembership(row.workspaceId, session.user.id);
+
+    const [chunk] = await db
+      .select({ id: documentChunk.id })
+      .from(documentChunk)
+      .where(eq(documentChunk.documentId, row.id))
+      .limit(1);
+
+    return { available: Boolean(chunk) };
+  }, "Failed to check chat availability for this document.");
+};
+
 export const askAboutDocument = async ({
   roomId,
   question,
