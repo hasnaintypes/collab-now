@@ -5,6 +5,7 @@ import {
   session,
   account,
   verification,
+  apikey,
   workspace,
   workspaceMember,
   workspaceInvite,
@@ -36,6 +37,36 @@ function foreignKey(table: Parameters<typeof getTableConfig>[0], columnName: str
   }
   return fk;
 }
+
+describe("apikey", () => {
+  it("cascades delete when its owning user is deleted", () => {
+    const fk = foreignKey(apikey, "reference_id");
+    expect(fk.onDelete).toBe("cascade");
+    expect(fk.reference().foreignTable).toBe(user);
+  });
+
+  it("requires the hashed key and timestamps, matching @better-auth/api-key's own schema", () => {
+    const { columns } = getTableConfig(apikey);
+    const key = columns.find((c) => c.name === "key");
+    const createdAt = columns.find((c) => c.name === "created_at");
+    const updatedAt = columns.find((c) => c.name === "updated_at");
+    expect(key?.notNull).toBe(true);
+    expect(createdAt?.notNull).toBe(true);
+    expect(updatedAt?.notNull).toBe(true);
+  });
+
+  it("defaults configId to 'default', enabled/rateLimitEnabled to true, and requestCount to 0", () => {
+    const { columns } = getTableConfig(apikey);
+    const configId = columns.find((c) => c.name === "config_id");
+    const enabled = columns.find((c) => c.name === "enabled");
+    const rateLimitEnabled = columns.find((c) => c.name === "rate_limit_enabled");
+    const requestCount = columns.find((c) => c.name === "request_count");
+    expect(configId?.default).toBe("default");
+    expect(enabled?.default).toBe(true);
+    expect(rateLimitEnabled?.default).toBe(true);
+    expect(requestCount?.default).toBe(0);
+  });
+});
 
 describe("workspace", () => {
   it("cascades delete when its owner is deleted", () => {

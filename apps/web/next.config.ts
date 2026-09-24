@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@collabnow/db", "@collabnow/email"],
+  transpilePackages: ["@collabnow/db", "@collabnow/email", "@collabnow/shared"],
   images: {
     remotePatterns: [
       {

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { apiKey } from "@better-auth/api-key";
 import { eq } from "drizzle-orm";
 import { db, document } from "@collabnow/db";
 import * as schema from "@collabnow/db/schema";
@@ -82,7 +83,35 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: ["http://localhost:3000"],
-  plugins: [nextCookies()],
+  plugins: [
+    // P2-6 / PRD FR-16: the browser extension authenticates via a personal
+    // access token instead of shared session cookies (it runs in a
+    // `chrome-extension://` origin, which never carries this app's session
+    // cookie). Backed by the `apikey` table in `@collabnow/db/schema/auth`
+    // — that table's own comment explains why its shape must match this
+    // plugin's schema exactly.
+    //
+    // Deliberately *not* using `enableSessionForAPIKeys` (which would make
+    // every session-authenticated endpoint in this app reachable via a
+    // Bearer/`x-api-key` header) — the plugin's own type docs flag that
+    // option as "not recommended for production use". Instead,
+    // `api/extension/me/route.ts` calls `auth.api.verifyApiKey` directly
+    // and resolves the user itself, so a PAT only ever unlocks the small,
+    // explicit set of extension-facing routes this app defines — not the
+    // full session surface (password change, account deletion, etc.).
+    apiKey({
+      requireName: true, // every token needs a name so a future revoke UI (P2-8) can tell them apart
+      enableMetadata: false,
+      rateLimit: {
+        enabled: true,
+        timeWindow: 60 * 60 * 1000, // 1 hour
+        maxRequests: 100, // generous — this key is used for polling/status checks (P2-7), not just one-shot submits
+      },
+    }),
+    // Must stay last: intercepts responses from the plugins above to set
+    // cookies via Next's cookie APIs (Better Auth's own requirement).
+    nextCookies(),
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;
