@@ -179,4 +179,54 @@ describe("embedTexts", () => {
       /GEMINI_API_KEY is not set/
     );
   });
+
+  it("uses RETRIEVAL_QUERY instead of the default RETRIEVAL_DOCUMENT when asked", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    const { embedTexts, GEMINI_EMBEDDING_MODEL, GEMINI_EMBEDDING_DIMENSIONS } =
+      await freshGemini();
+    embedContentMock.mockResolvedValueOnce({ embeddings: [{ values: [1, 0] }] });
+
+    await embedTexts(["question"], "RETRIEVAL_QUERY");
+
+    expect(embedContentMock).toHaveBeenCalledWith({
+      model: GEMINI_EMBEDDING_MODEL,
+      contents: ["question"],
+      config: {
+        outputDimensionality: GEMINI_EMBEDDING_DIMENSIONS,
+        taskType: "RETRIEVAL_QUERY",
+      },
+    });
+  });
+});
+
+describe("embedQuery", () => {
+  it("embeds a single question using RETRIEVAL_QUERY and returns its vector", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    const { embedQuery, GEMINI_EMBEDDING_MODEL, GEMINI_EMBEDDING_DIMENSIONS } =
+      await freshGemini();
+    embedContentMock.mockResolvedValueOnce({
+      embeddings: [{ values: [3, 4] }],
+    });
+
+    const result = await embedQuery("what is this about?");
+
+    expect(embedContentMock).toHaveBeenCalledWith({
+      model: GEMINI_EMBEDDING_MODEL,
+      contents: ["what is this about?"],
+      config: {
+        outputDimensionality: GEMINI_EMBEDDING_DIMENSIONS,
+        taskType: "RETRIEVAL_QUERY",
+      },
+    });
+    expect(result).toEqual([0.6, 0.8]);
+  });
+
+  it("throws a clear error when GEMINI_API_KEY is not set", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const { embedQuery } = await freshGemini();
+
+    await expect(embedQuery("hello")).rejects.toThrow(
+      /GEMINI_API_KEY is not set/
+    );
+  });
 });

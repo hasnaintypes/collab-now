@@ -82,19 +82,25 @@ export const GEMINI_EMBEDDING_DIMENSIONS = 768;
  * of N) and guarantees the returned embeddings line up with the input
  * texts by array index, which `chunk-embedder.ts` relies on.
  *
- * `taskType: "RETRIEVAL_DOCUMENT"` tells the model these are documents
- * being indexed for later retrieval (as opposed to `"RETRIEVAL_QUERY"`,
- * which P2-4's chat endpoint will use when embedding the user's question) —
- * Gemini's embedding models produce measurably better retrieval rankings
- * when each side of a query/document pair is embedded with the matching
- * task type rather than a generic one.
+ * `taskType` defaults to `"RETRIEVAL_DOCUMENT"`, telling the model these are
+ * documents being indexed for later retrieval — `chunk-embedder.ts` (P2-3)
+ * relies on this default and never passes the parameter itself. P2-4's chat
+ * endpoint passes `"RETRIEVAL_QUERY"` instead (via `embedQuery` below) when
+ * embedding the user's question — Gemini's embedding models produce
+ * measurably better retrieval rankings when each side of a query/document
+ * pair is embedded with the matching task type rather than a generic one.
  *
  * Truncated (sub-3072-dimension) Matryoshka embeddings aren't guaranteed to
  * come back unit-length the way the full-size embedding is, so results are
  * re-normalized to unit length here — otherwise cosine-similarity search
  * (P2-4) would be comparing vectors of inconsistent magnitude.
  */
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+export type EmbeddingTaskType = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
+
+export async function embedTexts(
+  texts: string[],
+  taskType: EmbeddingTaskType = "RETRIEVAL_DOCUMENT"
+): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   const client = getClient();
@@ -103,7 +109,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     contents: texts,
     config: {
       outputDimensionality: GEMINI_EMBEDDING_DIMENSIONS,
-      taskType: "RETRIEVAL_DOCUMENT",
+      taskType,
     },
   });
 
@@ -121,6 +127,21 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     }
     return normalize(values);
   });
+}
+
+/**
+ * Embeds a single user question for P2-4's chat/RAG retrieval, using the
+ * `"RETRIEVAL_QUERY"` task type — the query-side counterpart to
+ * `embedTexts`' document-side default. Kept as its own function (rather
+ * than callers passing the task type through directly) since every
+ * retrieval call site wants exactly one query embedding, not a batch.
+ */
+export async function embedQuery(text: string): Promise<number[]> {
+  const [embedding] = await embedTexts([text], "RETRIEVAL_QUERY");
+  if (!embedding) {
+    throw new Error("Failed to embed the query text.");
+  }
+  return embedding;
 }
 
 function normalize(vector: number[]): number[] {
