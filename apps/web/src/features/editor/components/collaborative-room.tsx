@@ -2,7 +2,7 @@
 
 import { RoomProvider, ClientSideSuspense } from "@liveblocks/react/suspense";
 import { useRef, useState, useCallback } from "react";
-import { PanelLeft, MessageSquare } from "lucide-react";
+import { PanelLeft, MessageSquare, MessageCircleQuestion } from "lucide-react";
 import Loader from "@/components/shared/loader";
 import { Editor } from "./editor";
 import type { HeadingEntry } from "./plugins/heading-outline-plugin";
@@ -19,12 +19,20 @@ export default function CollaborativeRoom({
   users,
   currentUserType,
   currentUser,
+  hasChatSource,
 }: CollaborativeRoomProps) {
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [wordCount, setWordCount] = useState(0);
   const [activeHeadingKey, setActiveHeadingKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [discussionOpen, setDiscussionOpen] = useState(false);
+  // P2-5: which tab the Discussion/Chat panel shows — owned here (not
+  // inside `Editor`) so both the desktop `<aside>` and the mobile `Sheet`
+  // (rendered in `editor.tsx`) and the two mobile trigger buttons below all
+  // stay in sync, same reason `discussionOpen` itself is lifted this high.
+  const [rightPanelTab, setRightPanelTab] = useState<"discussion" | "chat">(
+    "discussion"
+  );
 
   const scrollToHeadingRef = useRef<((key: string) => void) | null>(null);
   const exportRef = useRef<ExportFunctions | null>(null);
@@ -86,11 +94,25 @@ export default function CollaborativeRoom({
               <PanelLeft className="size-5" />
             </button>
             <button
-              onClick={() => setDiscussionOpen(true)}
+              onClick={() => {
+                setRightPanelTab("discussion");
+                setDiscussionOpen(true);
+              }}
               className="fixed right-4 top-20 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
             >
               <MessageSquare className="size-5" />
             </button>
+            {hasChatSource && (
+              <button
+                onClick={() => {
+                  setRightPanelTab("chat");
+                  setDiscussionOpen(true);
+                }}
+                className="fixed right-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
+              >
+                <MessageCircleQuestion className="size-5" />
+              </button>
+            )}
 
             <Editor
               roomId={roomId}
@@ -102,6 +124,9 @@ export default function CollaborativeRoom({
               documentTitle={roomMetadata.title}
               discussionOpen={discussionOpen}
               onDiscussionOpenChange={setDiscussionOpen}
+              hasChatSource={hasChatSource}
+              rightPanelTab={rightPanelTab}
+              onRightPanelTabChange={setRightPanelTab}
             />
           </main>
 
