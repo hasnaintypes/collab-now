@@ -36,8 +36,13 @@ vi.mock("@collabnow/db", () => ({
     ingestionJobId: "source_content.ingestion_job_id",
     generatedNotes: "source_content.generated_notes",
     documentId: "source_content.document_id",
+    rawText: "source_content.raw_text",
   },
   document: { id: "document.id", roomId: "document.room_id" },
+  documentChunk: {
+    id: "document_chunk.id",
+    documentId: "document_chunk.document_id",
+  },
   activityLog: {},
   user: { id: "user.id", email: "user.email" },
 }));
@@ -97,6 +102,13 @@ vi.mock("../lib/notes-generator", () => ({
   DEFAULT_NOTE_STYLE: "bullet-outline",
 }));
 
+const { embedSourceChunksMock } = vi.hoisted(() => ({
+  embedSourceChunksMock: vi.fn(),
+}));
+vi.mock("../lib/chunk-embedder", () => ({
+  embedSourceChunks: embedSourceChunksMock,
+}));
+
 const { TranscriptFetchError } = await import("../lib/youtube-transcript");
 const { ArticleFetchError } = await import("../lib/article-extractor");
 const { SourceValidationError } = await import("../lib/source-validator");
@@ -118,6 +130,9 @@ beforeEach(() => {
   validateYoutubeSourceMock.mockReset();
   validateArticleSourceMock.mockReset();
   generateNotesMock.mockReset().mockResolvedValue("generated notes");
+  embedSourceChunksMock
+    .mockReset()
+    .mockResolvedValue([{ content: "chunk one", embedding: [0.1, 0.2] }]);
   createRoomMock.mockReset().mockResolvedValue({ type: "room", id: "room-1" });
 });
 
@@ -154,7 +169,11 @@ describe("processIngestionJob", () => {
       .mockResolvedValueOnce([]) // validate-and-persist-source: no existing row
       .mockResolvedValueOnce([]) // generate-notes: no existing notes
       .mockResolvedValueOnce([]) // save-document: no existing linked document
-      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]) // requester lookup
+      .mockResolvedValueOnce([
+        { documentId: "doc-1", rawText: "hello world" },
+      ]) // chunk-and-embed: sourceRow lookup
+      .mockResolvedValueOnce([]); // chunk-and-embed: no existing chunks
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -206,6 +225,11 @@ describe("processIngestionJob", () => {
       expect.objectContaining({ documentId: "doc-1" })
     );
 
+    expect(embedSourceChunksMock).toHaveBeenCalledWith("hello world");
+    expect(insertValues).toHaveBeenCalledWith([
+      { documentId: "doc-1", chunkIndex: 0, content: "chunk one", embedding: [0.1, 0.2] },
+    ]);
+
     expect(updateSet).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ status: "processing" })
@@ -237,7 +261,11 @@ describe("processIngestionJob", () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ email: "user1@example.com" }]);
+      .mockResolvedValueOnce([{ email: "user1@example.com" }])
+      .mockResolvedValueOnce([
+        { documentId: "doc-1", rawText: "article body" },
+      ])
+      .mockResolvedValueOnce([]);
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -266,7 +294,9 @@ describe("processIngestionJob", () => {
       .mockResolvedValueOnce([{ id: "existing-row" }]) // validate-and-persist-source: already inserted
       .mockResolvedValueOnce([]) // generate-notes: no existing notes
       .mockResolvedValueOnce([]) // save-document: no existing linked document
-      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]) // requester lookup
+      .mockResolvedValueOnce([{ documentId: "doc-1", rawText: "hi" }]) // chunk-and-embed: sourceRow
+      .mockResolvedValueOnce([]); // chunk-and-embed: no existing chunks
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -290,7 +320,9 @@ describe("processIngestionJob", () => {
       .mockResolvedValueOnce([]) // validate-and-persist-source: no existing row
       .mockResolvedValueOnce([{ generatedNotes: "already generated" }]) // generate-notes: already generated
       .mockResolvedValueOnce([]) // save-document: no existing linked document
-      .mockResolvedValueOnce([{ email: "user1@example.com" }]); // requester lookup
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]) // requester lookup
+      .mockResolvedValueOnce([{ documentId: "doc-1", rawText: "hi" }]) // chunk-and-embed: sourceRow
+      .mockResolvedValueOnce([]); // chunk-and-embed: no existing chunks
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -396,7 +428,9 @@ describe("processIngestionJob", () => {
       .mockResolvedValueOnce([]) // validate-and-persist-source
       .mockResolvedValueOnce([]) // generate-notes
       .mockResolvedValueOnce([{ documentId: "doc-1" }]) // save-document: already linked
-      .mockResolvedValueOnce([{ roomId: "existing-room-1" }]); // document lookup by id
+      .mockResolvedValueOnce([{ roomId: "existing-room-1" }]) // document lookup by id
+      .mockResolvedValueOnce([{ documentId: "doc-1", rawText: "hi" }]) // chunk-and-embed: sourceRow
+      .mockResolvedValueOnce([{ id: "chunk-1" }]); // chunk-and-embed: already chunked
 
     const t = new InngestTestEngine({
       function: processIngestionJob,
@@ -409,6 +443,7 @@ describe("processIngestionJob", () => {
     expect(insertValues).not.toHaveBeenCalledWith(
       expect.objectContaining({ title: expect.anything() })
     );
+    expect(embedSourceChunksMock).not.toHaveBeenCalled();
   });
 
   it("fails without retrying if the requesting user no longer exists", async () => {
@@ -432,6 +467,57 @@ describe("processIngestionJob", () => {
 
     expect(saveStep.error).toMatchObject({ name: "NonRetriableError" });
     expect(createRoomMock).not.toHaveBeenCalled();
+  });
+  it("propagates an embedding failure as-is, without wrapping it in NonRetriableError", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([]) // validate-and-persist-source
+      .mockResolvedValueOnce([]) // generate-notes
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]) // requester lookup
+      .mockResolvedValueOnce([{ documentId: "doc-1", rawText: "hi" }]) // chunk-and-embed: sourceRow
+      .mockResolvedValueOnce([]); // chunk-and-embed: no existing chunks
+    embedSourceChunksMock.mockRejectedValueOnce(
+      new Error("Gemini embedding is down")
+    );
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    const { error } = await t.execute();
+
+    expect(error).toMatchObject({ message: "Gemini embedding is down" });
+    expect(error).not.toMatchObject({ name: "NonRetriableError" });
+  });
+
+  it("does nothing if source_content unexpectedly has no documentId yet", async () => {
+    fetchYoutubeTranscriptMock.mockResolvedValueOnce({
+      text: "hi",
+      language: "en",
+      durationSeconds: 10,
+    });
+    validateYoutubeSourceMock.mockReturnValueOnce("en");
+    selectLimit
+      .mockResolvedValueOnce([]) // validate-and-persist-source
+      .mockResolvedValueOnce([]) // generate-notes
+      .mockResolvedValueOnce([]) // save-document: no existing linked document
+      .mockResolvedValueOnce([{ email: "user1@example.com" }]) // requester lookup
+      .mockResolvedValueOnce([]); // chunk-and-embed: sourceRow lookup finds nothing
+
+    const t = new InngestTestEngine({
+      function: processIngestionJob,
+      events: [youtubeEvent],
+    });
+    const { result } = await t.execute();
+
+    expect(result).toMatchObject({ status: "ready" });
+    expect(embedSourceChunksMock).not.toHaveBeenCalled();
   });
 });
 
