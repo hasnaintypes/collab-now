@@ -245,11 +245,11 @@ export const sourceContent = pgTable(
 //
 // `embedding`'s `dimensions: 768` must match `GEMINI_EMBEDDING_DIMENSIONS`
 // in `apps/web/src/lib/gemini/index.ts` — see that constant's doc comment
-// for why 768 was chosen. A vector similarity index (e.g. HNSW with
-// `vector_cosine_ops`) is deliberately not added yet: P2-4 hasn't been
-// built, so there's no real query shape yet to validate an index choice
-// against, and pgvector index tuning is easier to get right once one
-// exists than to guess at now.
+// for why 768 was chosen. The HNSW similarity index below (P2-4) uses
+// `vector_cosine_ops` because `embedTexts`/`embedQuery` already re-normalize
+// every embedding to unit length, making cosine and dot-product distance
+// equivalent — cosine is used since it's pgvector's most common default and
+// the `<=>` operator matches it directly.
 
 export const documentChunk = pgTable(
   "document_chunk",
@@ -283,6 +283,14 @@ export const documentChunk = pgTable(
     uniqueIndex("document_chunk_document_id_chunk_index_idx").on(
       table.documentId,
       table.chunkIndex
+    ),
+    // Similarity search index for P2-4's retrieval query (ordering a
+    // document's chunks by `embedding <=> queryEmbedding`). HNSW over
+    // ivfflat since it doesn't need periodic rebuilding as rows are
+    // inserted and this table has no bulk-load step to build it after.
+    index("document_chunk_embedding_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops")
     ),
   ]
 );

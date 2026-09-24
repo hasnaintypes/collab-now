@@ -143,4 +143,16 @@ export const RATE_LIMITS = {
     limit: 20,
     windowMs: 60 * 60 * 1000, // 20 per hour
   },
+  /**
+   * `askAboutDocument` — apps/web/src/features/chat/actions/chat.actions.ts
+   * (P2-4). Each turn is one Gemini embedding call plus one Gemini
+   * generation call — same expense category as `notesRegenerate` (no
+   * re-fetch/re-extract, but real LLM cost either way), so it gets the
+   * same allowance.
+   */
+  chatQuery: {
+    name: "chat-query",
+    limit: 20,
+    windowMs: 60 * 60 * 1000, // 20 per hour
+  },
 } as const satisfies Record<string, RateLimitConfig>;
