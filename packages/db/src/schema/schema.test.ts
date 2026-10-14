@@ -238,6 +238,14 @@ describe("documentChunk", () => {
     const names = indexes.map((i) => i.config.name);
     expect(names).toContain("document_chunk_document_id_idx");
   });
+
+  it("has an HNSW cosine-similarity index on embedding for P2-4's retrieval query", () => {
+    const { indexes } = getTableConfig(documentChunk);
+    const embeddingIdx = indexes.find(
+      (i) => i.config.name === "document_chunk_embedding_idx"
+    );
+    expect(embeddingIdx?.config.method).toBe("hnsw");
+  });
 });
 
 describe("rateLimitBucket", () => {
