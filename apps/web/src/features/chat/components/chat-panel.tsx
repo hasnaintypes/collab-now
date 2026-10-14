@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { MessageCircleQuestion, SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,19 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ChatPanel is conditionally rendered (gated by `hasChatSource &&
+  // rightPanelTab === "chat"`), so switching tabs while a question is in
+  // flight unmounts this component before `askAboutDocument` resolves.
+  // Guard every post-await `setState` with this so a stale response can't
+  // touch state after unmount.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = question.trim();
@@ -36,6 +49,7 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
     setQuestion("");
 
     const result = await askAboutDocument({ roomId, question: trimmed });
+    if (!mountedRef.current) return;
     setSubmitting(false);
 
     if (!result.success) {

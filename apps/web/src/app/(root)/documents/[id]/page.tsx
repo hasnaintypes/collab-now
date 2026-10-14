@@ -38,12 +38,23 @@ export default async function DocumentPage({
     : "viewer";
 
   // P2-5: only documents with indexed source content (`document_chunk`)
-  // get an "Ask about this" chat tab — `false` here (either a manually
-  // created document, or a failed lookup) hides it entirely, satisfying
-  // "not shown on manually-created documents". Fetched server-side,
-  // alongside the room/user data this page already loads, rather than
-  // client-side on mount, so the tab renders with no loading flash.
+  // get an "Ask about this" chat tab. Fetched server-side, alongside the
+  // room/user data this page already loads, rather than client-side on
+  // mount, so the tab renders with no loading flash.
+  //
+  // A legitimate "manually created document" (no `document_chunk` rows)
+  // and a failed lookup (DB blip, lost workspace membership, etc.) both
+  // have to resolve to `hasChatSource = false` here — there's no tab to
+  // show "an error happened" in either case. But unlike the former, the
+  // latter is a real failure, so it's logged server-side rather than
+  // silently swallowed, to keep a production outage from looking
+  // identical to normal behavior.
   const chatAvailability = await getChatAvailability({ roomId: id });
+  if (!chatAvailability.success) {
+    console.error(
+      `Failed to check chat availability for room ${id}: ${chatAvailability.error}`
+    );
+  }
   const hasChatSource = chatAvailability.success
     ? chatAvailability.data.available
     : false;
