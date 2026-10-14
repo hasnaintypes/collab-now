@@ -17,8 +17,12 @@ import { generateText } from "@/lib/gemini";
 export const CHAT_TOP_K = 6;
 
 function buildPrompt(chunks: string[], question: string): string {
+  // Source text is arbitrary ingested content (articles/transcripts) and
+  // could itself contain the `"""` fence used below to delimit it — strip
+  // that exact sequence so excerpt text can never break out of the fence
+  // and be read as instructions.
   const context = chunks
-    .map((chunk, i) => `[Excerpt ${i + 1}]\n${chunk}`)
+    .map((chunk, i) => `[Excerpt ${i + 1}]\n${chunk.replaceAll('"""', "")}`)
     .join("\n\n");
 
   return (

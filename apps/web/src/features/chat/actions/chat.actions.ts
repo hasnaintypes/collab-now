@@ -1,12 +1,13 @@
 "use server";
 
 import { headers } from "next/headers";
-import { eq, and, sql } from "drizzle-orm";
-import { db, document, documentChunk, workspaceMember } from "@collabnow/db";
+import { eq, sql } from "drizzle-orm";
+import { db, document, documentChunk } from "@collabnow/db";
 
 import { auth } from "@/features/auth/lib";
 import { embedQuery } from "@/lib/gemini";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
+import { requireWorkspaceMembership } from "@/lib/workspace";
 import {
   type ActionResult,
   ActionError,
@@ -29,26 +30,6 @@ import { answerQuestionFromChunks, CHAT_TOP_K } from "../lib/document-chat";
  */
 
 const MAX_QUESTION_LENGTH = 2000;
-
-async function requireWorkspaceMembership(
-  workspaceId: string,
-  userId: string
-): Promise<void> {
-  const [membership] = await db
-    .select({ id: workspaceMember.id })
-    .from(workspaceMember)
-    .where(
-      and(
-        eq(workspaceMember.workspaceId, workspaceId),
-        eq(workspaceMember.userId, userId)
-      )
-    )
-    .limit(1);
-
-  if (!membership) {
-    throw new ActionError("You don't have access to this workspace.");
-  }
-}
 
 export const askAboutDocument = async ({
   roomId,

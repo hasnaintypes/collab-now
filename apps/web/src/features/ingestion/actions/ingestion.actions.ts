@@ -2,13 +2,14 @@
 
 import { nanoid } from "nanoid";
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
-import { db, ingestionJob, sourceContent, document, workspaceMember } from "@collabnow/db";
+import { eq } from "drizzle-orm";
+import { db, ingestionJob, sourceContent, document } from "@collabnow/db";
 
 import { auth } from "@/features/auth/lib";
 import { inngest } from "@/lib/inngest/client";
 import { parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
+import { requireWorkspaceMembership } from "@/lib/workspace";
 import {
   type ActionResult,
   ActionError,
@@ -35,26 +36,6 @@ import type {
  * (`features/ingestion/inngest/process-ingestion-job.ts`).
  * `getIngestionJobStatus` is the poll side of that same requirement.
  */
-
-async function requireWorkspaceMembership(
-  workspaceId: string,
-  userId: string
-): Promise<void> {
-  const [membership] = await db
-    .select({ id: workspaceMember.id })
-    .from(workspaceMember)
-    .where(
-      and(
-        eq(workspaceMember.workspaceId, workspaceId),
-        eq(workspaceMember.userId, userId)
-      )
-    )
-    .limit(1);
-
-  if (!membership) {
-    throw new ActionError("You don't have access to this workspace.");
-  }
-}
 
 export const enqueueIngestionJob = async ({
   workspaceId,
