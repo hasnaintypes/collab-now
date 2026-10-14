@@ -6,17 +6,24 @@
  * `apps/web/src/app/api/extension/*` rather than a blanket `next.config.ts`
  * `headers()` rule that would apply to every route.
  *
- * Allows any `chrome-extension://` origin rather than one specific
- * extension ID: during development an unpacked extension's ID is
- * regenerated per machine/load unless a fixed `key` is pinned in
- * `manifest.json`, so there's no single ID to allowlist yet. Once this
- * extension is published to the Chrome Web Store and has a stable ID,
- * tighten this to compare against that exact origin (e.g. via an env var)
- * instead of the whole `chrome-extension://` scheme — tracked as a
- * follow-up, not blocking P2-6 itself.
+ * Deliberately does *not* reflect back every `chrome-extension://` origin:
+ * that would let any other extension a user has installed — not just this
+ * one — satisfy CORS on these routes too. The extension itself never needs
+ * this header to begin with: its `host_permissions` entry for this origin
+ * (see `apps/extension/public/manifest.json`) already exempts its own
+ * fetches (from the background service worker, popup, and options page)
+ * from CORS entirely, same-origin or not.
+ *
+ * `ALLOWED_EXTENSION_ORIGIN` is left unset until this extension is
+ * published to the Chrome Web Store and has a stable ID (an unpacked
+ * extension's ID is regenerated per machine/load unless a fixed `key` is
+ * pinned in `manifest.json`, so there's no single ID to allowlist yet) —
+ * until then, no origin is allowed and these routes are effectively
+ * same-origin-only, which is strictly safer than allowlisting the whole
+ * `chrome-extension://` scheme while buying the real extension nothing.
  */
 
-const EXTENSION_ORIGIN_PREFIX = "chrome-extension://";
+const ALLOWED_EXTENSION_ORIGIN = process.env.ALLOWED_EXTENSION_ORIGIN;
 
 export function extensionCorsHeaders(origin: string | null): HeadersInit {
   const headers: Record<string, string> = {
@@ -26,7 +33,7 @@ export function extensionCorsHeaders(origin: string | null): HeadersInit {
     // the `x-api-key` header, never cookies, so there's nothing to allow.
   };
 
-  if (origin?.startsWith(EXTENSION_ORIGIN_PREFIX)) {
+  if (ALLOWED_EXTENSION_ORIGIN && origin === ALLOWED_EXTENSION_ORIGIN) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Vary"] = "Origin";
   }

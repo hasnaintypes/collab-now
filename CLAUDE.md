@@ -42,7 +42,7 @@ A GitHub Actions workflow (`.github/workflows/ci.yml`, P0-12) runs `pnpm lint` �
 ```
 apps/
 ├── web/            Next.js 16 + React 19 app — the actual product
-└── extension/       Browser extension (Vite + React + MV3) — currently a non-functional stub, see PRD §6.11
+└── extension/       Browser extension (Vite + React + MV3) — auth + tab detection functional as of P2-6 (see PRD §6.11); AI-notes generation from the detected tab is not wired yet
 
 packages/
 ├── db/              @collabnow/db — Drizzle schema + Neon Postgres client, shared by name import
@@ -93,7 +93,7 @@ Drizzle ORM against Neon serverless Postgres. Schema files: `packages/db/src/sch
 
 ### Planned but not yet built
 
-Per `docs/PRD.md` §6.8–6.12 and confirmed absent from the codebase: the pgvector-backed chat/RAG retrieval endpoint and "Ask about this" panel UI (P2-4/P2-5 — `document_chunk` itself now exists as of P2-3, just nothing reads from it yet), a functional browser extension, and Paddle billing. None of the corresponding tables (`subscription`, `usage_counter`) or env vars (Paddle keys) exist yet — see `docs/ROADMAP.md` for the phased build order before writing code toward these features.
+Per `docs/PRD.md` §6.8–6.12 and confirmed absent from the codebase: the browser extension's AI-notes generation from a detected tab (P2-6 only landed auth + tab detection — see monorepo layout above), and Paddle billing. None of the corresponding tables (`subscription`, `usage_counter`) or env vars (Paddle keys) exist yet — see `docs/ROADMAP.md` for the phased build order before writing code toward these features.
 
 ## Git & commits
 
