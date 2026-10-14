@@ -1,7 +1,7 @@
 {
   "extends": "@collabnow/typescript-config/base.json",
   "compilerOptions": {
-    "lib": ["ES2017"],
+    "lib": ["ES2017", "DOM"],
     "module": "esnext",
     "moduleResolution": "bundler"
   },
