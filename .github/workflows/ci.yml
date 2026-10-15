@@ -1,8 +1,12 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [master]
+  # No `branches:` filter here (unlike `push` below) — this repo stacks PRs
+  # on top of each other's branches rather than always targeting `master`
+  # (see CLAUDE.md's "Working conventions"), so restricting to
+  # `branches: [master]` would silently skip CI on every PR whose base is
+  # another feature branch instead of master.
+  pull_request: {}
   push:
     branches: [master]
   workflow_dispatch: {}
