@@ -55,3 +55,48 @@ export const verification = pgTable("verification", {
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
 });
+
+// ── API Key (Personal Access Token) ─────────────────────────────
+// P2-6 / PRD FR-16: backs the `@better-auth/api-key` plugin configured in
+// `apps/web/src/features/auth/lib/server.ts` — this is *not* a hand-rolled
+// token table, it's the exact schema that plugin's own `apiKeySchema()`
+// declares (field names/types copied verbatim from
+// `node_modules/@better-auth/api-key/dist/index.mjs`), so Better Auth's
+// Drizzle adapter can read/write it transparently the same way it already
+// does for `user`/`session`/`account`/`verification` above. The table name
+// ("apikey", no underscore) and every field name must match the plugin's
+// schema exactly — Better Auth resolves both by the property key on this
+// module's exports, not by any config mapping.
+//
+// `referenceId` is the owning user's id — this app only uses the plugin's
+// default "user" reference mode (see `enableSessionForAPIKeys` in
+// `server.ts`), so it's safe to add the FK/cascade here even though the
+// plugin's own field type is a generic string. `key` stores the SHA-256
+// hash of the raw token, never the raw value itself — the plugin only
+// returns the raw token once, at creation time, same UX as a GitHub PAT.
+export const apikey = pgTable("apikey", {
+  id: text("id").primaryKey(),
+  configId: text("config_id").notNull().default("default"),
+  name: text("name"),
+  start: text("start"),
+  referenceId: text("reference_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  prefix: text("prefix"),
+  key: text("key").notNull(),
+  refillInterval: integer("refill_interval"),
+  refillAmount: integer("refill_amount"),
+  lastRefillAt: timestamp("last_refill_at"),
+  enabled: boolean("enabled").notNull().default(true),
+  rateLimitEnabled: boolean("rate_limit_enabled").notNull().default(true),
+  rateLimitTimeWindow: integer("rate_limit_time_window"),
+  rateLimitMax: integer("rate_limit_max"),
+  requestCount: integer("request_count").notNull().default(0),
+  remaining: integer("remaining"),
+  lastRequest: timestamp("last_request"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
+  permissions: text("permissions"),
+  metadata: text("metadata"),
+});

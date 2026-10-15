@@ -1,0 +1,19 @@
+{
+  "name": "@collabnow/shared",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@collabnow/typescript-config": "workspace:*",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}
