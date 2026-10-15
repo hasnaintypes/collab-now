@@ -2,14 +2,16 @@
   "name": "extension",
   "version": "0.0.1",
   "private": true,
-  "description": "CollabNow browser extension stub (see docs/PRD.md \u00a76.11). Not yet functional.",
+  "description": "CollabNow browser extension (see docs/PRD.md \u00a76.11). Manifest/auth/tab-detection functional as of P2-6; one-click generate (P2-7) not yet wired.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@collabnow/shared": "workspace:*",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -22,6 +24,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9",
     "typescript": "^5",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.11"
   }
 }
