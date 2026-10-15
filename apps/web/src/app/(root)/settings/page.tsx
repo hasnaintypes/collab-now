@@ -7,6 +7,7 @@ import {
   getOrCreateWorkspace,
   getWorkspaceMembers,
 } from "@/features/workspace/actions/workspace.actions";
+import { listPersonalAccessTokens } from "@/features/settings/actions/token.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
@@ -24,10 +25,14 @@ export default async function SettingsPage() {
   }
   const workspaceData = workspaceResult.data;
 
-  // Member list failures degrade to an empty list rather than failing the
-  // whole page — the rest of Settings is still useful without it.
+  // Member list / token list failures degrade to an empty list rather than
+  // failing the whole page — the rest of Settings is still useful without
+  // either.
   const membersResult = await getWorkspaceMembers(workspaceData.id);
   const members = membersResult.success ? membersResult.data : [];
+
+  const tokensResult = await listPersonalAccessTokens();
+  const tokens = tokensResult.success ? tokensResult.data : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -76,6 +81,7 @@ export default async function SettingsPage() {
             memberCount: workspaceData.memberCount,
           }}
           members={members}
+          tokens={tokens}
         />
       </main>
     </div>

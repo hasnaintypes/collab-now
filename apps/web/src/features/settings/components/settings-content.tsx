@@ -10,6 +10,7 @@ import {
   Users,
   Shield,
   ExternalLink,
+  KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +19,9 @@ import { dateConverter } from "@/lib/utils";
 import WorkspaceMembersList from "@/features/workspace/components/workspace-members-list";
 import LeaveWorkspaceButton from "@/features/workspace/components/leave-workspace-button";
 import DeleteAccountSection from "./delete-account-section";
+import PersonalAccessTokensSection from "./personal-access-tokens-section";
 import type { WorkspaceMember, WorkspaceRole } from "@/features/workspace/types";
+import type { PersonalAccessToken } from "../actions/token.actions";
 
 type SettingsContentProps = {
   user: {
@@ -35,6 +38,7 @@ type SettingsContentProps = {
     memberCount: number;
   };
   members: WorkspaceMember[];
+  tokens: PersonalAccessToken[];
 };
 
 function SectionHeader({
@@ -82,6 +86,7 @@ export default function SettingsContent({
   user,
   workspace,
   members,
+  tokens,
 }: SettingsContentProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -244,6 +249,12 @@ export default function SettingsContent({
             />
           </div>
         )}
+      </section>
+
+      {/* Developer */}
+      <section>
+        <SectionHeader icon={KeyRound} title="Developer" />
+        <PersonalAccessTokensSection tokens={tokens} />
       </section>
 
       {/* Quick Links */}
