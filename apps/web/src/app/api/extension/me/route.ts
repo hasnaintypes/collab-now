@@ -1,7 +1,5 @@
-import { eq } from "drizzle-orm";
-import { db, user } from "@collabnow/db";
-import { auth } from "@/features/auth/lib";
 import { extensionCorsHeaders } from "@/lib/cors";
+import { authenticateExtensionRequest } from "@/lib/extension-auth";
 
 /**
  * P2-6: the extension calls this once (options page "test connection", and
@@ -18,36 +16,12 @@ import { extensionCorsHeaders } from "@/lib/cors";
 export async function GET(request: Request) {
   const headers = extensionCorsHeaders(request.headers.get("origin"));
 
-  const token = request.headers.get("x-api-key");
-  if (!token) {
-    return Response.json(
-      { error: "Missing x-api-key header." },
-      { status: 401, headers }
-    );
+  const auth = await authenticateExtensionRequest(request);
+  if (!auth.ok) {
+    return Response.json({ error: auth.error }, { status: 401, headers });
   }
 
-  const result = await auth.api.verifyApiKey({ body: { key: token } });
-  if (!result.valid || !result.key) {
-    return Response.json(
-      { error: "Invalid or expired personal access token." },
-      { status: 401, headers }
-    );
-  }
-
-  const [account] = await db
-    .select({ id: user.id, name: user.name, email: user.email })
-    .from(user)
-    .where(eq(user.id, result.key.referenceId))
-    .limit(1);
-
-  if (!account) {
-    return Response.json(
-      { error: "Invalid or expired personal access token." },
-      { status: 401, headers }
-    );
-  }
-
-  return Response.json({ user: account }, { status: 200, headers });
+  return Response.json({ user: auth.user }, { status: 200, headers });
 }
 
 export async function OPTIONS(request: Request) {

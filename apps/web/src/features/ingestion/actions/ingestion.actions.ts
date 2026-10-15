@@ -1,13 +1,10 @@
 "use server";
 
-import { nanoid } from "nanoid";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
-import { db, ingestionJob, sourceContent, document } from "@collabnow/db";
+import { db, sourceContent, document } from "@collabnow/db";
 
 import { auth } from "@/features/auth/lib";
-import { inngest } from "@/lib/inngest/client";
-import { parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
 import { requireWorkspaceMembership } from "@/lib/workspace";
 import {
@@ -17,16 +14,13 @@ import {
   safeAction,
 } from "@/lib/action-result";
 
-import { ingestionJobRequested } from "../inngest/events";
-import { detectSourceType } from "../lib/source-detector";
+import {
+  enqueueIngestionJobForUser,
+  getIngestionJobStatusForUser,
+} from "../lib/job-service";
 import { generateNotes, NOTE_STYLE_LABELS } from "../lib/notes-generator";
 import type { SupportedLanguage } from "../lib/source-validator";
-import type {
-  IngestionJobStatus,
-  IngestionJobStatusView,
-  NoteStyle,
-  SourceType,
-} from "../types";
+import type { IngestionJobStatusView, NoteStyle } from "../types";
 
 /**
  * Server actions for the ingestion pipeline (P1-5). `enqueueIngestionJob`
@@ -34,7 +28,12 @@ import type {
  * id back immediately, without waiting on the fetch/validate/persist work
  * that happens asynchronously in `processIngestionJob`
  * (`features/ingestion/inngest/process-ingestion-job.ts`).
- * `getIngestionJobStatus` is the poll side of that same requirement.
+ * `getIngestionJobStatus` is the poll side of that same requirement. Both
+ * are thin session-auth wrappers around `../lib/job-service`'s `userId`-
+ * taking core — the extension's equivalent routes (P2-7,
+ * `app/api/extension/generate`/`jobs/[id]`) wrap that same core with
+ * personal-access-token auth instead, so the queueing/status logic itself
+ * only exists once.
  */
 
 export const enqueueIngestionJob = async ({
@@ -49,67 +48,11 @@ export const enqueueIngestionJob = async ({
     return actionError("You must be signed in to submit a URL.");
   }
 
-  const rateLimit = await checkRateLimit(
-    RATE_LIMITS.ingestionSubmit,
-    session.user.id
-  );
-  if (!rateLimit.success) {
-    return actionError(
-      `You're submitting content too quickly. Try again in ${formatRetryAfter(rateLimit.retryAfterSeconds!)}.`,
-      rateLimit.retryAfterSeconds
-    );
-  }
-
-  const sourceType = detectSourceType(sourceUrl);
-  if (!sourceType) {
-    return actionError(
-      "That doesn't look like a valid YouTube or article URL."
-    );
-  }
-
-  return safeAction(async () => {
-    await requireWorkspaceMembership(workspaceId, session.user.id);
-
-    const jobId = nanoid();
-
-    await db.insert(ingestionJob).values({
-      id: jobId,
-      sourceUrl,
-      sourceType,
-      requesterId: session.user.id,
-      workspaceId,
-      status: "queued",
-    });
-
-    try {
-      await inngest.send(
-        ingestionJobRequested.create({
-          jobId,
-          sourceUrl,
-          sourceType,
-          requesterId: session.user.id,
-          workspaceId,
-        })
-      );
-    } catch (error) {
-      // The job row already exists at this point — if it can't actually be
-      // queued, mark it failed right away instead of leaving it stuck at
-      // "queued" forever with nothing to ever pick it up.
-      await db
-        .update(ingestionJob)
-        .set({
-          status: "failed",
-          errorMessage: "Failed to queue this job. Please try again.",
-          updatedAt: new Date(),
-        })
-        .where(eq(ingestionJob.id, jobId));
-
-      console.error(error);
-      throw new ActionError("Failed to queue this job. Please try again.");
-    }
-
-    return { jobId };
-  }, "Failed to submit this URL. Please try again.");
+  return enqueueIngestionJobForUser({
+    userId: session.user.id,
+    workspaceId,
+    sourceUrl,
+  });
 };
 
 export const getIngestionJobStatus = async ({
@@ -122,51 +65,7 @@ export const getIngestionJobStatus = async ({
     return actionError("You must be signed in to view job status.");
   }
 
-  return safeAction(async () => {
-    // Left-joined through source_content to document so `roomId` comes
-    // back in the same query once P1-7's save-document step has linked
-    // them — both joins resolve to all-null columns for a job that hasn't
-    // reached that point yet, not a missing row.
-    const [row] = await db
-      .select({
-        id: ingestionJob.id,
-        workspaceId: ingestionJob.workspaceId,
-        status: ingestionJob.status,
-        sourceType: ingestionJob.sourceType,
-        sourceUrl: ingestionJob.sourceUrl,
-        errorMessage: ingestionJob.errorMessage,
-        createdAt: ingestionJob.createdAt,
-        updatedAt: ingestionJob.updatedAt,
-        roomId: document.roomId,
-      })
-      .from(ingestionJob)
-      .leftJoin(
-        sourceContent,
-        eq(sourceContent.ingestionJobId, ingestionJob.id)
-      )
-      .leftJoin(document, eq(sourceContent.documentId, document.id))
-      .where(eq(ingestionJob.id, jobId))
-      .limit(1);
-
-    if (!row) {
-      throw new ActionError("That job could not be found.");
-    }
-
-    // Workspace-shared, not requester-only — the resulting document is
-    // visible to the whole workspace anyway once it exists (P1-7).
-    await requireWorkspaceMembership(row.workspaceId, session.user.id);
-
-    return parseStringify({
-      id: row.id,
-      status: row.status as IngestionJobStatus,
-      sourceType: row.sourceType as SourceType,
-      sourceUrl: row.sourceUrl,
-      errorMessage: row.errorMessage,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      roomId: row.roomId ?? null,
-    });
-  }, "Failed to load job status. Please try again.");
+  return getIngestionJobStatusForUser({ userId: session.user.id, jobId });
 };
 
 /**
