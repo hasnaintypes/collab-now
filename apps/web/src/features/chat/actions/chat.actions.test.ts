@@ -72,7 +72,9 @@ vi.mock("../lib/document-chat", () => ({
   CHAT_TOP_K: 6,
 }));
 
-const { askAboutDocument } = await import("./chat.actions");
+const { askAboutDocument, getChatAvailability } = await import(
+  "./chat.actions"
+);
 
 beforeEach(() => {
   dbMock.select.mockReset();
@@ -255,5 +257,66 @@ describe("askAboutDocument", () => {
       question: "What happens at the end?",
     });
     expect(result).toEqual({ success: true, data: { answer: "the answer" } });
+  });
+});
+
+describe("getChatAvailability", () => {
+  it("rejects when the caller isn't signed in", async () => {
+    getSessionMock.mockResolvedValueOnce(null);
+
+    const result = await getChatAvailability({ roomId: "room-A" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "You must be signed in to view this document.",
+    });
+    expect(dbMock.select).not.toHaveBeenCalled();
+  });
+
+  it("returns unavailable for a roomId with no matching document, without an error", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(selectChain([]));
+
+    const result = await getChatAvailability({ roomId: "missing-room" });
+
+    expect(result).toEqual({ success: true, data: { available: false } });
+  });
+
+  it("rejects when the caller isn't a member of the document's workspace", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-B" } });
+    dbMock.select
+      .mockReturnValueOnce(selectChain([{ id: "doc-A", workspaceId: "ws-A" }]))
+      .mockReturnValueOnce(selectChain([])); // no membership row
+
+    const result = await getChatAvailability({ roomId: "room-A" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "You don't have access to this workspace.",
+    });
+  });
+
+  it("returns unavailable when the document has no indexed chunks yet", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(selectChain([{ id: "doc-A", workspaceId: "ws-A" }]))
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]))
+      .mockReturnValueOnce(selectChain([])); // no document_chunk rows
+
+    const result = await getChatAvailability({ roomId: "room-A" });
+
+    expect(result).toEqual({ success: true, data: { available: false } });
+  });
+
+  it("returns available once at least one chunk is indexed", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(selectChain([{ id: "doc-A", workspaceId: "ws-A" }]))
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]))
+      .mockReturnValueOnce(selectChain([{ id: "chunk-1" }]));
+
+    const result = await getChatAvailability({ roomId: "room-A" });
+
+    expect(result).toEqual({ success: true, data: { available: true } });
   });
 });

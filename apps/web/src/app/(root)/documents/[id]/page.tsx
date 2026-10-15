@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/features/auth/lib";
 import { getDocument } from "@/features/documents/actions/room.actions";
 import { getUsers } from "@/features/documents/actions/user.actions";
+import { getChatAvailability } from "@/features/chat/actions/chat.actions";
 import CollaborativeRoom from "@/features/editor/components/collaborative-room";
 
 export default async function DocumentPage({
@@ -36,6 +37,28 @@ export default async function DocumentPage({
     ? "editor"
     : "viewer";
 
+  // P2-5: only documents with indexed source content (`document_chunk`)
+  // get an "Ask about this" chat tab. Fetched server-side, alongside the
+  // room/user data this page already loads, rather than client-side on
+  // mount, so the tab renders with no loading flash.
+  //
+  // A legitimate "manually created document" (no `document_chunk` rows)
+  // and a failed lookup (DB blip, lost workspace membership, etc.) both
+  // have to resolve to `hasChatSource = false` here — there's no tab to
+  // show "an error happened" in either case. But unlike the former, the
+  // latter is a real failure, so it's logged server-side rather than
+  // silently swallowed, to keep a production outage from looking
+  // identical to normal behavior.
+  const chatAvailability = await getChatAvailability({ roomId: id });
+  if (!chatAvailability.success) {
+    console.error(
+      `Failed to check chat availability for room ${id}: ${chatAvailability.error}`
+    );
+  }
+  const hasChatSource = chatAvailability.success
+    ? chatAvailability.data.available
+    : false;
+
   return (
     <CollaborativeRoom
       roomId={id}
@@ -47,6 +70,7 @@ export default async function DocumentPage({
         email: user.email,
         avatar: user.image || "",
       }}
+      hasChatSource={hasChatSource}
     />
   );
 }
