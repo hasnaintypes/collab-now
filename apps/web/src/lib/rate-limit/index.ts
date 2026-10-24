@@ -155,4 +155,15 @@ export const RATE_LIMITS = {
     limit: 20,
     windowMs: 60 * 60 * 1000, // 20 per hour
   },
+  /**
+   * `createPersonalAccessToken` — apps/web/src/features/settings/actions/token.actions.ts
+   * (P2-8). Cheap (one DB insert via Better Auth's api-key plugin), so this
+   * is just here to stop someone scripting a token-generation loop, not to
+   * protect an expensive operation like the AI-backed limiters above.
+   */
+  tokenCreate: {
+    name: "token-create",
+    limit: 10,
+    windowMs: 60 * 60 * 1000, // 10 per hour
+  },
 } as const satisfies Record<string, RateLimitConfig>;
