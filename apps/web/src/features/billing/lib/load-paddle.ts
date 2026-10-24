@@ -9,13 +9,17 @@ import { PADDLE_CLIENT_TOKEN, PADDLE_ENV } from "./paddle-config";
  * Paddle's own docs still support plain script-tag integration, so this
  * isn't a workaround so much as the other officially supported path.
  */
-type PaddleCheckoutItem = { priceId: string; quantity?: number };
-
-type PaddleCheckoutOptions = {
-  items: PaddleCheckoutItem[];
-  customer?: { email: string };
-  customData?: Record<string, string>;
-};
+/**
+ * Only the `transactionId` form — `createCheckoutTransaction`
+ * (`../actions/billing.actions.ts`) creates the transaction server-side
+ * (price, quantity, `customData.workspaceId`, all set after the server
+ * re-verifies the caller's workspace role), so the client never needs to
+ * pass raw `items`/`customData` into `Checkout.open()` itself. That's
+ * deliberate: an `items`-based open would let a client tamper with
+ * `customData.workspaceId` to attribute a checkout to a workspace it
+ * doesn't administer.
+ */
+type PaddleCheckoutOptions = { transactionId: string };
 
 type PaddleInstance = {
   Environment: { set: (env: "sandbox" | "production") => void };
@@ -72,8 +76,18 @@ export function loadPaddle(): Promise<PaddleInstance> {
         reject(new Error("Paddle.js loaded but did not attach window.Paddle."));
         return;
       }
-      window.Paddle.Environment.set(PADDLE_ENV);
-      window.Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
+      try {
+        window.Paddle.Environment.set(PADDLE_ENV);
+        window.Paddle.Initialize({ token: PADDLE_CLIENT_TOKEN });
+      } catch (err) {
+        // Without this, a bad env/token value thrown synchronously here
+        // would never resolve or reject the promise — every future
+        // loadPaddle() call would hang forever on the stale pending
+        // `paddleLoadPromise`.
+        paddleLoadPromise = null;
+        reject(err instanceof Error ? err : new Error("Failed to initialize Paddle.js."));
+        return;
+      }
       resolve(window.Paddle);
     };
     script.onerror = () => {

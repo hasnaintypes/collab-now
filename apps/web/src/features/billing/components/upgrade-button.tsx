@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { loadPaddle } from "../lib/load-paddle";
-import { PADDLE_PRICE_IDS } from "../lib/paddle-config";
+import { createCheckoutTransaction } from "../actions/billing.actions";
 import type { PaidPlanId } from "../types";
 
 type UpgradeButtonProps = {
   plan: PaidPlanId;
   workspaceId: string;
-  customerEmail: string;
   label: string;
 };
 
@@ -19,41 +18,34 @@ type UpgradeButtonProps = {
  * criteria by construction rather than by any validation this component
  * does itself.
  *
- * `customData.workspaceId` rides along on the resulting Paddle subscription
- * object so P3-3's webhook handler knows which workspace to attribute the
- * upgrade to — Paddle has no concept of CollabNow's own workspace ids. That
- * handler still needs to treat this value as attacker-influenced input (a
- * technical user could tamper with it via devtools) and re-verify the
- * paying user's membership before writing anything, the same trust-boundary
- * rule as every other server action in this codebase — this component only
- * gates who *sees* the button, not a security boundary by itself.
+ * The transaction itself is created server-side first
+ * (`createCheckoutTransaction`, which re-verifies the caller's workspace
+ * role) rather than this component calling `Paddle.Checkout.open()` with
+ * raw `items`/`customData` — that's the real authorization boundary, not
+ * `canManageBilling` hiding this button in `billing-section.tsx`, which is
+ * UI-only and wouldn't stop a technical user from invoking this flow
+ * directly.
  */
 export default function UpgradeButton({
   plan,
   workspaceId,
-  customerEmail,
   label,
 }: UpgradeButtonProps) {
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const priceId = PADDLE_PRICE_IDS[plan];
-
   async function handleClick() {
-    if (!priceId) {
-      setError("Checkout isn't configured yet for this plan.");
-      return;
-    }
-
     setOpening(true);
     setError(null);
     try {
+      const result = await createCheckoutTransaction({ workspaceId, plan });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+
       const paddle = await loadPaddle();
-      paddle.Checkout.open({
-        items: [{ priceId, quantity: 1 }],
-        customer: { email: customerEmail },
-        customData: { workspaceId },
-      });
+      paddle.Checkout.open({ transactionId: result.data.transactionId });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't open checkout.");
     } finally {

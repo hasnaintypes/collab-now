@@ -263,7 +263,6 @@ export default function SettingsContent({
           workspaceId={workspace.id}
           subscription={subscription}
           canManageBilling={workspace.role === "owner" || workspace.role === "admin"}
-          customerEmail={user.email}
         />
       </section>
 

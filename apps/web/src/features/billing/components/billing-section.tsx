@@ -9,14 +9,12 @@ type BillingSectionProps = {
   /** Only workspace owners/admins can start a checkout — same role gate as
    * the member-management actions in `workspace.actions.ts`. */
   canManageBilling: boolean;
-  customerEmail: string;
 };
 
 export default function BillingSection({
   workspaceId,
   subscription,
   canManageBilling,
-  customerEmail,
 }: BillingSectionProps) {
   const { plan, status } = subscription;
 
@@ -31,7 +29,11 @@ export default function BillingSection({
             </p>
           </div>
           <Badge variant={plan === "free" ? "outline" : "default"}>
-            {PLAN_LABELS[plan]}
+            {/* Defensive fallback: `subscription.plan` is a plain `text`
+                column at the DB layer (packages/db/src/schema/app.ts), so a
+                future plan value this map hasn't caught up with yet should
+                still render *something* readable rather than "undefined". */}
+            {PLAN_LABELS[plan] ?? plan}
           </Badge>
         </div>
 
@@ -55,7 +57,6 @@ export default function BillingSection({
             <UpgradeButton
               plan="pro"
               workspaceId={workspaceId}
-              customerEmail={customerEmail}
               label="Upgrade to Pro"
             />
           </div>
@@ -72,7 +73,6 @@ export default function BillingSection({
             <UpgradeButton
               plan="team"
               workspaceId={workspaceId}
-              customerEmail={customerEmail}
               label="Upgrade to Team"
             />
           </div>
