@@ -87,7 +87,7 @@ export const createPersonalAccessToken = async ({
     return actionError("You must be signed in to create a personal access token.");
   }
 
-  const trimmedName = name.trim();
+  const trimmedName = typeof name === "string" ? name.trim() : "";
   if (!trimmedName) {
     return actionError("Give this token a name so you can tell it apart later.");
   }

@@ -27,11 +27,12 @@ export default async function SettingsPage() {
 
   // Member list / token list failures degrade to an empty list rather than
   // failing the whole page — the rest of Settings is still useful without
-  // either.
-  const membersResult = await getWorkspaceMembers(workspaceData.id);
+  // either. They're independent, so fetch them concurrently.
+  const [membersResult, tokensResult] = await Promise.all([
+    getWorkspaceMembers(workspaceData.id),
+    listPersonalAccessTokens(),
+  ]);
   const members = membersResult.success ? membersResult.data : [];
-
-  const tokensResult = await listPersonalAccessTokens();
   const tokens = tokensResult.success ? tokensResult.data : [];
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,12 @@ export default function PersonalAccessTokensSection({
   tokens: PersonalAccessToken[];
 }) {
   const [items, setItems] = useState(tokens);
+
+  // Keep in sync if the parent re-renders with a fresh `tokens` prop without
+  // remounting this component (e.g. a future router.refresh() on this page).
+  useEffect(() => {
+    setItems(tokens);
+  }, [tokens]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
