@@ -216,6 +216,7 @@ describe("enqueueIngestionJob", () => {
       allowed: false,
       limit: 5,
       used: 5,
+      periodStart: new Date("2026-01-01T00:00:00.000Z"),
     });
 
     const result = await enqueueIngestionJob(params);
@@ -224,6 +225,7 @@ describe("enqueueIngestionJob", () => {
       success: false,
       error:
         "This workspace has used all 5 notes included in its plan this month. Upgrade to generate more.",
+      upgradeRequired: true,
     });
     expect(dbMock.insert).not.toHaveBeenCalled();
   });

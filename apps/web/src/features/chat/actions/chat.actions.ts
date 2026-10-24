@@ -132,8 +132,11 @@ export const askAboutDocument = async ({
     // all).
     const plan = await getEffectivePlan(row.workspaceId);
     if (!planIncludesChat(plan)) {
+      // P3-5 / PRD §7 Flow D: upgradeRequired lets chat-panel.tsx render
+      // an upgrade link instead of treating this like any other error.
       throw new ActionError(
-        "Chat is available on the Pro and Team plans. Upgrade to ask questions about your documents."
+        "Chat is available on the Pro and Team plans. Upgrade to ask questions about your documents.",
+        { upgradeRequired: true }
       );
     }
 

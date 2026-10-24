@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import UpgradeLink from "@/features/billing/components/upgrade-link";
 import {
   enqueueIngestionJob,
   getIngestionJobStatus,
@@ -44,6 +45,7 @@ export default function NewFromUrlDialog({
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<IngestionJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => {
@@ -64,6 +66,7 @@ export default function NewFromUrlDialog({
     setJobId(null);
     setStatus(null);
     setError(null);
+    setUpgradeRequired(false);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -106,6 +109,7 @@ export default function NewFromUrlDialog({
       return;
     }
     setError(null);
+    setUpgradeRequired(false);
     setSubmitting(true);
 
     const result = await enqueueIngestionJob({
@@ -117,6 +121,7 @@ export default function NewFromUrlDialog({
 
     if (!result.success) {
       setError(result.error);
+      setUpgradeRequired(result.upgradeRequired ?? false);
       return;
     }
 
@@ -175,6 +180,8 @@ export default function NewFromUrlDialog({
           )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {upgradeRequired && <UpgradeLink block />}
 
           {status === "failed" && (
             <Button variant="outline" onClick={resetState} className="w-full">

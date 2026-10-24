@@ -19,6 +19,15 @@ describe("actionSuccess / actionError", () => {
       retryAfterSeconds: 30,
     });
   });
+
+  it("builds an error result with upgradeRequired", () => {
+    expect(actionError("cap hit", undefined, true)).toEqual({
+      success: false,
+      error: "cap hit",
+      retryAfterSeconds: undefined,
+      upgradeRequired: true,
+    });
+  });
 });
 
 describe("safeAction", () => {

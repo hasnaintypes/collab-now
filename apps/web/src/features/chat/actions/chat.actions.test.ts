@@ -244,6 +244,7 @@ describe("askAboutDocument", () => {
       success: false,
       error:
         "Chat is available on the Pro and Team plans. Upgrade to ask questions about your documents.",
+      upgradeRequired: true,
     });
     expect(embedQueryMock).not.toHaveBeenCalled();
     expect(answerQuestionFromChunksMock).not.toHaveBeenCalled();
