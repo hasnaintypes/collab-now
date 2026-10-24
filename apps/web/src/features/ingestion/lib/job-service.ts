@@ -15,6 +15,10 @@ import {
 
 import { ingestionJobRequested } from "../inngest/events";
 import { detectSourceType } from "./source-detector";
+import {
+  reserveNotesGenerationSlot,
+  releaseNotesGenerationSlot,
+} from "@/features/billing/lib/usage-enforcement";
 import type { IngestionJobStatus, IngestionJobStatusView, SourceType } from "../types";
 
 /**
@@ -56,6 +60,17 @@ export async function enqueueIngestionJobForUser({
   return safeAction(async () => {
     await requireWorkspaceMembership(workspaceId, userId);
 
+    // P3-4 / FR-20: enforce the workspace's plan limit *before* the job
+    // row exists, not after — reserveNotesGenerationSlot atomically
+    // increments the workspace's usage_counter for this billing period
+    // and reports whether that increment was allowed to happen at all.
+    const usage = await reserveNotesGenerationSlot(workspaceId);
+    if (!usage.allowed) {
+      throw new ActionError(
+        `This workspace has used all ${usage.limit} notes included in its plan this month. Upgrade to generate more.`
+      );
+    }
+
     const jobId = nanoid();
 
     await db.insert(ingestionJob).values({
@@ -89,6 +104,10 @@ export async function enqueueIngestionJobForUser({
           updatedAt: new Date(),
         })
         .where(eq(ingestionJob.id, jobId));
+
+      // The job never actually got queued — don't charge the workspace's
+      // monthly cap for a generation attempt that will never run.
+      await releaseNotesGenerationSlot(workspaceId);
 
       console.error(error);
       throw new ActionError("Failed to queue this job. Please try again.");
