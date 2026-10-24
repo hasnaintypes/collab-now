@@ -3,7 +3,16 @@ import type { SourceType } from "@collabnow/shared";
 
 export type JobResult<T> =
   | { success: true; data: T }
-  | { success: false; error: string; retryAfterSeconds?: number };
+  | {
+      success: false;
+      error: string;
+      retryAfterSeconds?: number;
+      /** P3-5 / PRD §7 Flow D — set when this failure is a free-plan
+       * workspace hitting its notes-generation cap, so the popup can
+       * offer a link into the web app's billing settings instead of
+       * just showing the error text. */
+      upgradeRequired?: boolean;
+    };
 
 export type JobStatus = "queued" | "processing" | "ready" | "failed";
 

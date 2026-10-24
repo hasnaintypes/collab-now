@@ -9,7 +9,10 @@ import { unstable_rethrow } from "next/navigation";
  *
  * `retryAfterSeconds` is an optional cross-cutting extra used by rate-limited
  * actions (see `@/lib/rate-limit`); actions that don't rate limit simply never
- * set it.
+ * set it. `upgradeRequired` is the same kind of extra for P3-5's Flow D
+ * (PRD §7) — a free-plan workspace hitting its notes-generation cap
+ * (`job-service.ts`) or trying to use chat (`chat.actions.ts`) sets this so
+ * the UI can render an upgrade link instead of treating it as a plain error.
  *
  * Deliberately excluded: `getUsers`/`getDocumentUsers`
  * (`features/documents/actions/user.actions.ts`) feed directly into
@@ -19,7 +22,12 @@ import { unstable_rethrow } from "next/navigation";
  */
 export type ActionResult<T> =
   | { success: true; data: T }
-  | { success: false; error: string; retryAfterSeconds?: number };
+  | {
+      success: false;
+      error: string;
+      retryAfterSeconds?: number;
+      upgradeRequired?: boolean;
+    };
 
 export function actionSuccess<T>(data: T): ActionResult<T> {
   return { success: true, data };
@@ -27,9 +35,10 @@ export function actionSuccess<T>(data: T): ActionResult<T> {
 
 export function actionError(
   error: string,
-  retryAfterSeconds?: number
+  retryAfterSeconds?: number,
+  upgradeRequired?: boolean
 ): ActionResult<never> {
-  return { success: false, error, retryAfterSeconds };
+  return { success: false, error, retryAfterSeconds, upgradeRequired };
 }
 
 /**
@@ -42,8 +51,20 @@ export function actionError(
  * Any *other* thrown error is treated as unexpected: it's logged server-side
  * and replaced with a generic message before reaching the client, so internal
  * details (DB errors, Liveblocks API errors, stack traces) never leak to the UI.
+ *
+ * `upgradeRequired` carries P3-5's Flow D flag through the throw — `actionError`
+ * can't be called directly from inside a `safeAction`-wrapped body (its
+ * return value would just be the resolved value, not a short-circuiting
+ * rejection), so this is how that extra reaches `safeAction`'s catch block.
  */
-export class ActionError extends Error {}
+export class ActionError extends Error {
+  upgradeRequired?: boolean;
+
+  constructor(message: string, options?: { upgradeRequired?: boolean }) {
+    super(message);
+    this.upgradeRequired = options?.upgradeRequired;
+  }
+}
 
 /**
  * Wraps a server action's body so it always resolves to `ActionResult<T>`.
@@ -62,7 +83,7 @@ export async function safeAction<T>(
     unstable_rethrow(error);
 
     if (error instanceof ActionError) {
-      return actionError(error.message);
+      return actionError(error.message, undefined, error.upgradeRequired);
     }
 
     console.error(error);

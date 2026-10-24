@@ -66,8 +66,12 @@ export async function enqueueIngestionJobForUser({
     // and reports whether that increment was allowed to happen at all.
     const usage = await reserveNotesGenerationSlot(workspaceId);
     if (!usage.allowed) {
+      // P3-5 / PRD §7 Flow D: upgradeRequired lets the caller (both
+      // new-from-url-dialog.tsx and the extension popup) render an
+      // upgrade link instead of treating this like any other error.
       throw new ActionError(
-        `This workspace has used all ${usage.limit} notes included in its plan this month. Upgrade to generate more.`
+        `This workspace has used all ${usage.limit} notes included in its plan this month. Upgrade to generate more.`,
+        { upgradeRequired: true }
       );
     }
 

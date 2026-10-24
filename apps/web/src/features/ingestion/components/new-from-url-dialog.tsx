@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ export default function NewFromUrlDialog({
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<IngestionJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => {
@@ -64,6 +66,7 @@ export default function NewFromUrlDialog({
     setJobId(null);
     setStatus(null);
     setError(null);
+    setUpgradeRequired(false);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -106,6 +109,7 @@ export default function NewFromUrlDialog({
       return;
     }
     setError(null);
+    setUpgradeRequired(false);
     setSubmitting(true);
 
     const result = await enqueueIngestionJob({
@@ -117,6 +121,7 @@ export default function NewFromUrlDialog({
 
     if (!result.success) {
       setError(result.error);
+      setUpgradeRequired(result.upgradeRequired ?? false);
       return;
     }
 
@@ -175,6 +180,15 @@ export default function NewFromUrlDialog({
           )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {upgradeRequired && (
+            <Link
+              href="/settings"
+              className="block text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Upgrade your plan →
+            </Link>
+          )}
 
           {status === "failed" && (
             <Button variant="outline" onClick={resetState} className="w-full">

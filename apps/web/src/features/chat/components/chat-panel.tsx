@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { MessageCircleQuestion, SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
   const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
 
   // ChatPanel is conditionally rendered (gated by `hasChatSource &&
   // rightPanelTab === "chat"`), so switching tabs while a question is in
@@ -44,6 +46,7 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
     if (!trimmed || submitting) return;
 
     setError(null);
+    setUpgradeRequired(false);
     setSubmitting(true);
     setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
     setQuestion("");
@@ -54,6 +57,7 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
 
     if (!result.success) {
       setError(result.error);
+      setUpgradeRequired(result.upgradeRequired ?? false);
       return;
     }
 
@@ -98,6 +102,15 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
       )}
 
       {error && <p className="text-xs text-red-500">{error}</p>}
+
+      {upgradeRequired && (
+        <Link
+          href="/settings"
+          className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Upgrade your plan →
+        </Link>
+      )}
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
         <Input

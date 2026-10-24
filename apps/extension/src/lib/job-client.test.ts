@@ -49,6 +49,27 @@ describe("generateNotes", () => {
     });
   });
 
+  it("surfaces upgradeRequired (P3-5 Flow D) so the popup can offer an upgrade link", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        success: false,
+        error:
+          "This workspace has used all 5 notes included in its plan this month. Upgrade to generate more.",
+        upgradeRequired: true,
+      }),
+    });
+
+    const result = await generateNotes("secret-token", "https://example.com");
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "This workspace has used all 5 notes included in its plan this month. Upgrade to generate more.",
+      upgradeRequired: true,
+    });
+  });
+
   it("normalizes a non-200 (e.g. invalid token) into success: false", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,

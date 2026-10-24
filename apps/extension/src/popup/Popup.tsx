@@ -33,6 +33,7 @@ export default function Popup() {
   const [generating, setGenerating] = useState(false);
   const [job, setJob] = useState<JobStatusView | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
+  const [jobUpgradeRequired, setJobUpgradeRequired] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function Popup() {
     if (!token || !tabInfo?.url || !tabInfo.sourceType) return;
 
     setJobError(null);
+    setJobUpgradeRequired(false);
     setGenerating(true);
 
     const result = await generateNotes(token, tabInfo.url);
@@ -106,6 +108,7 @@ export default function Popup() {
 
     if (!result.success) {
       setJobError(result.error);
+      setJobUpgradeRequired(result.upgradeRequired ?? false);
       return;
     }
 
@@ -127,10 +130,19 @@ export default function Popup() {
     void chrome.tabs.create({ url: `${API_BASE_URL}/documents/${job.roomId}` });
   };
 
+  // P3-5 / PRD §7 Flow D: there's no Paddle checkout UI in the extension
+  // itself — it lives in the web app's Settings billing section (P3-2) —
+  // so the upgrade link just deep-links there in a new tab rather than
+  // duplicating that flow here.
+  const openBillingSettings = () => {
+    void chrome.tabs.create({ url: `${API_BASE_URL}/settings` });
+  };
+
   const retry = () => {
     stopPolling();
     setJob(null);
     setJobError(null);
+    setJobUpgradeRequired(false);
   };
 
   const isSupportedPage = tabInfo?.sourceType != null;
@@ -190,6 +202,22 @@ export default function Popup() {
 
       {jobError && (
         <p style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{jobError}</p>
+      )}
+
+      {jobUpgradeRequired && (
+        <button
+          onClick={openBillingSettings}
+          style={{
+            marginTop: 8,
+            width: "100%",
+            padding: "8px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Upgrade plan
+        </button>
       )}
 
       {job?.status === "ready" && job.roomId && (
