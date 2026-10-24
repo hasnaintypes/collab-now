@@ -145,6 +145,30 @@ describe("applyPaddleWebhookEvent", () => {
     );
   });
 
+  it("never overwrites the stored plan on cancellation, even with no price id to resolve", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await applyPaddleWebhookEvent(
+      event({
+        event_type: "subscription.canceled",
+        data: { id: "sub_1", custom_data: { workspaceId: "workspace-1" } },
+      })
+    );
+
+    // The fresh-insert branch still needs *some* plan value to satisfy the
+    // NOT NULL column, but the update-on-conflict `set` must omit `plan`
+    // entirely — a Team-plan workspace canceling must never get silently
+    // downgraded to "pro"/"free" just because this event carries no price
+    // id to resolve.
+    const call = onConflictDoUpdateMock.mock.calls[0] as unknown as [
+      { set: Record<string, unknown> },
+    ];
+    const { set } = call[0];
+    expect(set).not.toHaveProperty("plan");
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it("marks the subscription past_due on transaction.payment_failed via an update, not an upsert", async () => {
     await applyPaddleWebhookEvent(
       event({ event_type: "transaction.payment_failed" })

@@ -47,7 +47,15 @@ function resolveWorkspaceId(event: PaddleWebhookEvent): string | null {
 
 async function upsertSubscription(params: {
   workspaceId: string;
-  plan: PaidPlanId;
+  /**
+   * `undefined` means "don't touch the stored plan" — used by
+   * `subscription.canceled`, which only changes `status`/clears the
+   * billing period. A workspace's plan doesn't change on cancellation, so
+   * there's nothing to resolve from the event, and nothing to risk
+   * overwriting a correct "team"/"pro" value with `resolvePlan`'s "pro"
+   * fallback if the event's price id can't be matched.
+   */
+  plan: PaidPlanId | undefined;
   status: string;
   paddleSubscriptionId: string | null;
   paddleCustomerId: string | null;
@@ -67,15 +75,22 @@ async function upsertSubscription(params: {
   } = params;
 
   // Insert-or-update keyed on the workspace's one-row-per-workspace
-  // uniqueness (P3-1), only applying the update when this event is newer
-  // than whatever's already stored — see `lastEventAt`'s doc comment in
-  // packages/db/src/schema/app.ts for why that's both the idempotency and
-  // the out-of-order-delivery guard.
+  // uniqueness (P3-1), only applying the update when this event is at
+  // least as new as whatever's already stored — see `lastEventAt`'s doc
+  // comment in packages/db/src/schema/app.ts for why that's both the
+  // idempotency and the out-of-order-delivery guard. `<=`, not `<`: Paddle
+  // can fire two genuinely different events (e.g. created then updated)
+  // with an identical `occurred_at`, and a strict `<` would silently drop
+  // the second one instead of applying it — re-applying an exact replay's
+  // identical values on `<=` is harmless, since nothing actually changes.
   await db
     .insert(subscription)
     .values({
       workspaceId,
-      plan,
+      // No existing row to preserve a plan from — shouldn't happen in
+      // practice (nothing can be canceled before it's created), but the
+      // column is NOT NULL, so fall back to "free" rather than "pro".
+      plan: plan ?? "free",
       status,
       paddleSubscriptionId,
       paddleCustomerId,
@@ -86,7 +101,7 @@ async function upsertSubscription(params: {
     .onConflictDoUpdate({
       target: subscription.workspaceId,
       set: {
-        plan,
+        ...(plan !== undefined ? { plan } : {}),
         status,
         paddleSubscriptionId,
         paddleCustomerId,
@@ -95,7 +110,7 @@ async function upsertSubscription(params: {
         lastEventAt: occurredAt,
         updatedAt: new Date(),
       },
-      where: sql`${subscription.lastEventAt} is null or ${subscription.lastEventAt} < ${occurredAt}`,
+      where: sql`${subscription.lastEventAt} is null or ${subscription.lastEventAt} <= ${occurredAt}`,
     });
 }
 
@@ -140,7 +155,7 @@ export async function applyPaddleWebhookEvent(
     case "subscription.canceled":
       await upsertSubscription({
         workspaceId,
-        plan: resolvePlan(event),
+        plan: undefined,
         status: "canceled",
         paddleSubscriptionId: event.data.id ?? null,
         paddleCustomerId: event.data.customer_id ?? null,
@@ -162,7 +177,7 @@ export async function applyPaddleWebhookEvent(
         .update(subscription)
         .set({ status: "past_due", lastEventAt: occurredAt, updatedAt: new Date() })
         .where(
-          sql`${subscription.workspaceId} = ${workspaceId} and (${subscription.lastEventAt} is null or ${subscription.lastEventAt} < ${occurredAt})`
+          sql`${subscription.workspaceId} = ${workspaceId} and (${subscription.lastEventAt} is null or ${subscription.lastEventAt} <= ${occurredAt})`
         );
       return;
 
