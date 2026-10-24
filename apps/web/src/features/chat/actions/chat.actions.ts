@@ -14,6 +14,8 @@ import {
   actionError,
   safeAction,
 } from "@/lib/action-result";
+import { getEffectivePlan } from "@/features/billing/lib/workspace-plan";
+import { planIncludesChat } from "@/features/billing/lib/plan-limits";
 
 import { answerQuestionFromChunks, CHAT_TOP_K } from "../lib/document-chat";
 
@@ -121,6 +123,19 @@ export const askAboutDocument = async ({
     // input — this is the isolation boundary PRD §10 requires.
     await requireWorkspaceMembership(row.workspaceId, session.user.id);
     const documentId = row.id;
+
+    // P3-4 / FR-21: chat is a Pro/Team feature — Free keeps full
+    // collaboration access, just not this. Checked here rather than in
+    // `getChatAvailability` (which only answers "does this document have
+    // indexed content to chat about", a separate, plan-independent
+    // question the P2-5 UI uses to decide whether to render the panel at
+    // all).
+    const plan = await getEffectivePlan(row.workspaceId);
+    if (!planIncludesChat(plan)) {
+      throw new ActionError(
+        "Chat is available on the Pro and Team plans. Upgrade to ask questions about your documents."
+      );
+    }
 
     const queryEmbedding = await embedQuery(trimmedQuestion);
     // pgvector's `vector` type has no first-class Drizzle parameter

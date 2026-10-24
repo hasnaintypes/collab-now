@@ -72,6 +72,13 @@ vi.mock("../lib/document-chat", () => ({
   CHAT_TOP_K: 6,
 }));
 
+const { getEffectivePlanMock } = vi.hoisted(() => ({
+  getEffectivePlanMock: vi.fn(),
+}));
+vi.mock("@/features/billing/lib/workspace-plan", () => ({
+  getEffectivePlan: getEffectivePlanMock,
+}));
+
 const { askAboutDocument, getChatAvailability } = await import(
   "./chat.actions"
 );
@@ -84,6 +91,10 @@ beforeEach(() => {
     .mockResolvedValue({ success: true, limit: 20, remaining: 19 });
   embedQueryMock.mockReset().mockResolvedValue([0.1, 0.2, 0.3]);
   answerQuestionFromChunksMock.mockReset().mockResolvedValue("the answer");
+  // Pro by default so every pre-existing test below (written before P3-4's
+  // plan gate existed) keeps exercising retrieval, not the new rejection —
+  // the free-plan case gets its own dedicated test.
+  getEffectivePlanMock.mockReset().mockResolvedValue("pro");
 });
 
 describe("askAboutDocument", () => {
@@ -218,6 +229,24 @@ describe("askAboutDocument", () => {
     };
     expect(chunks).toEqual(["Document B's own excerpt"]);
     expect(chunks).not.toContain("Document A's own excerpt");
+  });
+
+  it("rejects a free-plan workspace with an upgrade message, before any retrieval happens", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(selectChain([{ id: "doc-A", workspaceId: "ws-A" }]))
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]));
+    getEffectivePlanMock.mockResolvedValueOnce("free");
+
+    const result = await askAboutDocument(params);
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "Chat is available on the Pro and Team plans. Upgrade to ask questions about your documents.",
+    });
+    expect(embedQueryMock).not.toHaveBeenCalled();
+    expect(answerQuestionFromChunksMock).not.toHaveBeenCalled();
   });
 
   it("fails when the document has no indexed chunks yet", async () => {
