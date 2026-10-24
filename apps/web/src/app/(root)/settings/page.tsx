@@ -8,6 +8,7 @@ import {
   getWorkspaceMembers,
 } from "@/features/workspace/actions/workspace.actions";
 import { listPersonalAccessTokens } from "@/features/settings/actions/token.actions";
+import { getWorkspaceSubscription } from "@/features/billing/actions/billing.actions";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
@@ -25,15 +26,20 @@ export default async function SettingsPage() {
   }
   const workspaceData = workspaceResult.data;
 
-  // Member list / token list failures degrade to an empty list rather than
-  // failing the whole page — the rest of Settings is still useful without
-  // either. They're independent, so fetch them concurrently.
-  const [membersResult, tokensResult] = await Promise.all([
+  // Member list / token list / subscription failures degrade to a safe
+  // fallback rather than failing the whole page — the rest of Settings is
+  // still useful without any of them. They're independent, so fetch them
+  // concurrently.
+  const [membersResult, tokensResult, subscriptionResult] = await Promise.all([
     getWorkspaceMembers(workspaceData.id),
     listPersonalAccessTokens(),
+    getWorkspaceSubscription(workspaceData.id),
   ]);
   const members = membersResult.success ? membersResult.data : [];
   const tokens = tokensResult.success ? tokensResult.data : [];
+  const subscription = subscriptionResult.success
+    ? subscriptionResult.data
+    : { plan: "free" as const, status: "active" };
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -83,6 +89,7 @@ export default async function SettingsPage() {
           }}
           members={members}
           tokens={tokens}
+          subscription={subscription}
         />
       </main>
     </div>

@@ -11,6 +11,7 @@ import {
   Shield,
   ExternalLink,
   KeyRound,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -20,8 +21,10 @@ import WorkspaceMembersList from "@/features/workspace/components/workspace-memb
 import LeaveWorkspaceButton from "@/features/workspace/components/leave-workspace-button";
 import DeleteAccountSection from "./delete-account-section";
 import PersonalAccessTokensSection from "./personal-access-tokens-section";
+import BillingSection from "@/features/billing/components/billing-section";
 import type { WorkspaceMember, WorkspaceRole } from "@/features/workspace/types";
 import type { PersonalAccessToken } from "../actions/token.actions";
+import type { WorkspaceSubscription } from "@/features/billing/types";
 
 type SettingsContentProps = {
   user: {
@@ -39,6 +42,7 @@ type SettingsContentProps = {
   };
   members: WorkspaceMember[];
   tokens: PersonalAccessToken[];
+  subscription: WorkspaceSubscription;
 };
 
 function SectionHeader({
@@ -87,6 +91,7 @@ export default function SettingsContent({
   workspace,
   members,
   tokens,
+  subscription,
 }: SettingsContentProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -249,6 +254,17 @@ export default function SettingsContent({
             />
           </div>
         )}
+      </section>
+
+      {/* Billing */}
+      <section>
+        <SectionHeader icon={CreditCard} title="Billing" />
+        <BillingSection
+          workspaceId={workspace.id}
+          subscription={subscription}
+          canManageBilling={workspace.role === "owner" || workspace.role === "admin"}
+          customerEmail={user.email}
+        />
       </section>
 
       {/* Developer */}
