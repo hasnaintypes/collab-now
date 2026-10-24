@@ -306,6 +306,14 @@ export const documentChunk = pgTable(
 // in this schema — validated at the app layer. `paddleSubscriptionId`/
 // `paddleCustomerId` are nullable because a workspace defaults to the free
 // plan with no Paddle subscription until it upgrades (P3-2).
+//
+// `lastEventAt` (P3-3) is the `occurred_at` timestamp of the most recently
+// *applied* Paddle webhook event for this workspace — not the same as
+// `updatedAt`. Paddle delivers webhooks at-least-once and with no ordering
+// guarantee, so the webhook handler (`features/billing/lib/
+// paddle-webhook-handler.ts`) only applies an incoming event when its own
+// `occurred_at` is newer than this column, making replay and out-of-order
+// delivery both safe no-ops instead of double-applies or regressions.
 
 export const subscription = pgTable("subscription", {
   id: text("id")
@@ -323,6 +331,7 @@ export const subscription = pgTable("subscription", {
   paddleCustomerId: text("paddle_customer_id"),
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
+  lastEventAt: timestamp("last_event_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

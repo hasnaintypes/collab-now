@@ -77,7 +77,7 @@ INNGEST_DEV=1
 INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
 
-# Billing (Paddle) — checkout is wired (P3-2); webhooks/usage enforcement are not yet (see Roadmap)
+# Billing (Paddle) — checkout and webhooks are wired (P3-2/P3-3); usage enforcement is not yet (see Roadmap)
 PADDLE_API_KEY=
 PADDLE_WEBHOOK_SECRET=
 NEXT_PUBLIC_PADDLE_ENV=sandbox
