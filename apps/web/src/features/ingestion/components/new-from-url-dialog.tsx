@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import UpgradeLink from "@/features/billing/components/upgrade-link";
 import {
   enqueueIngestionJob,
   getIngestionJobStatus,
@@ -181,14 +181,7 @@ export default function NewFromUrlDialog({
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
-          {upgradeRequired && (
-            <Link
-              href="/settings"
-              className="block text-sm font-medium text-primary underline-offset-4 hover:underline"
-            >
-              Upgrade your plan →
-            </Link>
-          )}
+          {upgradeRequired && <UpgradeLink block />}
 
           {status === "failed" && (
             <Button variant="outline" onClick={resetState} className="w-full">

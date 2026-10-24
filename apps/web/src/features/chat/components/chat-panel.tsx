@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import Link from "next/link";
 import { MessageCircleQuestion, SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import UpgradeLink from "@/features/billing/components/upgrade-link";
 import { askAboutDocument } from "../actions/chat.actions";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -103,14 +103,7 @@ export default function ChatPanel({ roomId }: { roomId: string }) {
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {upgradeRequired && (
-        <Link
-          href="/settings"
-          className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-        >
-          Upgrade your plan →
-        </Link>
-      )}
+      {upgradeRequired && <UpgradeLink />}
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
         <Input
