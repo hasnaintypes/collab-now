@@ -77,10 +77,13 @@ INNGEST_DEV=1
 INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
 
-# Billing is not yet wired to any feature — placeholders only (see Roadmap)
+# Billing (Paddle) — checkout is wired (P3-2); webhooks/usage enforcement are not yet (see Roadmap)
 PADDLE_API_KEY=
 PADDLE_WEBHOOK_SECRET=
-PADDLE_ENV=sandbox
+NEXT_PUBLIC_PADDLE_ENV=sandbox
+NEXT_PUBLIC_PADDLE_CLIENT_TOKEN=
+NEXT_PUBLIC_PADDLE_PRICE_ID_PRO=
+NEXT_PUBLIC_PADDLE_PRICE_ID_TEAM=
 ```
 
 See `apps/web/.env.example` for the full list, including optional Playwright E2E overrides.
@@ -179,7 +182,7 @@ Work is tracked as GitHub issues, phased and labeled `phase-0` through `phase-4`
 | **0 — Foundation** | Auth completeness, data-layer fixes, error handling, rate limiting, tests, CI, AI/billing infra prep | ✅ Shipped |
 | **1 — Ingestion MVP** | Paste a YouTube/article URL → validated, translated, summarized (Gemini) → saved as a document | ✅ Shipped |
 | **2 — Notes UX, Chat, Extension** | Additional note styles (Cornell, Mind-Map, Q&A, Executive Summary), "Ask about this" RAG chat, a functional browser extension | 🚧 Planned |
-| **3 — Billing** | Paddle checkout, webhooks, usage tracking/enforcement | 🚧 Planned |
+| **3 — Billing** | Paddle checkout, webhooks, usage tracking/enforcement | 🚧 In progress |
 | **4 — Backlog** | Document templates, keyboard shortcuts, workspace-wide chat | 📋 Deferred |
 
 See open/closed issues on GitHub for the full, itemized breakdown.
