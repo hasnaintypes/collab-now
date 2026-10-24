@@ -169,10 +169,31 @@ async function fetchHtml(
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        // A generic browser-like Accept header; some sites 406 on bare
-        // fetch/bot-style requests otherwise.
+        // A generic browser-navigation request profile. Node's default
+        // fetch header set identifies as a non-browser client, which
+        // several major publishers (Medium notably, behind Cloudflare)
+        // reject outright with a 403 before the page is even considered —
+        // not a real paywall, just bot-fingerprinting. This is the same
+        // header set a browser sends for a normal page load; it doesn't
+        // defeat any access control the user isn't already entitled to
+        // pass (they're fetching a URL they themselves chose to paste in).
+        // The fuller `Sec-Fetch-*`/`Referer` set (beyond just UA/Accept)
+        // matches what multiple independent Medium-fetching tools settled
+        // on — a partial browser-like header set alone can still get a
+        // bot-safe/stripped response even at a 200 status.
         Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Connection: "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
       },
     });
   } finally {

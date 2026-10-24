@@ -50,6 +50,45 @@ const PAYWALL_TEASER_HTML = `<!doctype html>
 </body>
 </html>`;
 
+// A Cloudflare/Akamai-style interstitial "challenge" page: a real HTTP 200,
+// distinct from both a 403 (outright rejection) and the JS-rendered-shell
+// case above (a legitimate app with no server-rendered content at all) —
+// this is a WAF deliberately substituting a bot-check page in place of the
+// real one, at a successful status code, so the reader never sees the
+// requested article.
+const CHALLENGE_PAGE_HTML = `<!doctype html>
+<html>
+<head><title>Just a moment...</title></head>
+<body>
+<div id="challenge-form">
+<h1>Checking your browser before accessing the page.</h1>
+<p>This process is automatic. Your browser will redirect to your requested content shortly.</p>
+<p>Please allow up to 5 seconds...</p>
+</div>
+</body>
+</html>`;
+
+// A Medium-shaped article: enough body paragraphs under a real <article>
+// tag, with the surrounding nav/footer chrome Medium's own markup includes,
+// to confirm the generic extractor handles a Medium-article-shaped
+// document the same way it handles any other site's — no Medium-specific
+// code path exists, nor is one needed once the request itself isn't blocked.
+const MEDIUM_ARTICLE_HTML = `<!doctype html>
+<html lang="en">
+<head><title>Why You Should Document Your Code | Medium</title></head>
+<body>
+<nav><a href="/">Medium</a><a href="/m/signin">Sign in</a></nav>
+<article>
+<h1>Why You Should Document Your Code</h1>
+<p class="byline">By A. Writer · 6 min read</p>
+<p>${LONG_PARAGRAPH}</p>
+<p>${LONG_PARAGRAPH} A second paragraph continuing the thought with even more filler text so the total character count comfortably clears the configured minimum content length threshold.</p>
+<p>${LONG_PARAGRAPH} And a third paragraph for good measure, further padding out the readable text.</p>
+</article>
+<footer><a href="/about">About</a><a href="/help">Help</a></footer>
+</body>
+</html>`;
+
 function htmlResponse(
   html: string,
   init: { status?: number; contentType?: string; contentLength?: string } = {}
@@ -257,6 +296,53 @@ describe("fetchArticle", () => {
 
     expect(result.title).toContain("My Great Article Title");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends a full browser-navigation header set on every request", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(htmlResponse(ARTICLE_HTML));
+
+    await fetchArticle(URL, { fetch: fetchMock });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "User-Agent": expect.stringContaining("Mozilla/5.0"),
+          Accept: expect.stringContaining("text/html"),
+          "Accept-Language": expect.any(String),
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Dest": "document",
+        }),
+      })
+    );
+  });
+
+  it("extracts a Medium-shaped article the same way as any other site, once the request isn't blocked", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(htmlResponse(MEDIUM_ARTICLE_HTML));
+
+    const result = await fetchArticle("https://medium.com/@someone/some-post", {
+      fetch: fetchMock,
+    });
+
+    expect(result.title).toContain("Why You Should Document Your Code");
+    expect(result.text).toContain("sufficiently long paragraph");
+    expect(result.text).not.toContain("Sign in");
+    expect(result.text).not.toContain("About");
+  });
+
+  it("fails cleanly with \"extraction-failed\" for a WAF challenge/interstitial page, not the challenge text", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(htmlResponse(CHALLENGE_PAGE_HTML));
+    const delay = fakeDelay();
+
+    const error = await fetchArticle(URL, { fetch: fetchMock, delay }).catch(
+      (e) => e
+    );
+
+    expect(error).toBeInstanceOf(ArticleFetchError);
+    expect(error).toMatchObject({ reason: "extraction-failed" });
+    expect(delay).not.toHaveBeenCalled();
   });
 
   it("forwards a custom fetch implementation and uses it exclusively", async () => {

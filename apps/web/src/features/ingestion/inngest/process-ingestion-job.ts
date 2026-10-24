@@ -1,7 +1,7 @@
 import { NonRetriableError } from "inngest";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
-import { updateTag, revalidatePath } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import {
   db,
   ingestionJob,
@@ -290,8 +290,12 @@ export const processIngestionJob = inngest.createFunction(
         metadata: JSON.stringify({ roomId: newRoomId, title }),
       });
 
-      updateTag(documentsTag(requesterId));
-      updateTag(activityTag(workspaceId));
+      // `updateTag` (room.actions.ts/workspace.actions.ts's equivalent calls)
+      // only works inside a Server Action — this step runs through the
+      // Inngest Route Handler instead, where Next.js requires
+      // `revalidateTag`'s plain (non-Server-Action) invalidation.
+      revalidateTag(documentsTag(requesterId), "max");
+      revalidateTag(activityTag(workspaceId), "max");
       revalidatePath("/dashboard");
 
       return newRoomId;
