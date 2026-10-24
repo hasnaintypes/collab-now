@@ -171,7 +171,7 @@ describe("createDocument", () => {
     expect(options.metadata).not.toHaveProperty("templateId");
   });
 
-  it("stores a valid templateId in the room's metadata", async () => {
+  it("stores a valid templateId in the room's metadata and names the document after it", async () => {
     getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
     dbMock.select.mockReturnValueOnce(countChain(0));
     createRoomMock.mockResolvedValueOnce({
@@ -179,7 +179,7 @@ describe("createDocument", () => {
       metadata: {
         creatorId: "user-1",
         email: params.email,
-        title: "Untitled document",
+        title: "Meeting Notes",
         templateId: "meeting-notes",
       },
       usersAccesses: {},
@@ -188,7 +188,10 @@ describe("createDocument", () => {
     await createDocument({ ...params, templateId: "meeting-notes" });
 
     const [, options] = createRoomMock.mock.calls[0]!;
-    expect(options.metadata).toMatchObject({ templateId: "meeting-notes" });
+    expect(options.metadata).toMatchObject({
+      templateId: "meeting-notes",
+      title: "Meeting Notes",
+    });
   });
 
   it("silently drops an unrecognized templateId rather than storing it", async () => {

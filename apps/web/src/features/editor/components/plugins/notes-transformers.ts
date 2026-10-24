@@ -1,3 +1,4 @@
+import { $getRoot, type LexicalEditor } from "lexical";
 import {
   HEADING,
   ORDERED_LIST,
@@ -22,3 +23,23 @@ export const NOTES_TRANSFORMERS = [
   ORDERED_LIST,
   ...TEXT_FORMAT_TRANSFORMERS,
 ];
+
+/**
+ * Shared "is this document still blank" check for both seeding plugins —
+ * Lexical/Liveblocks' actual starting state is one empty paragraph, not
+ * zero nodes. Kept in one place so a future change to what counts as
+ * empty can't drift between `seed-notes-plugin.tsx` and
+ * `seed-template-plugin.tsx`.
+ */
+export function isEditorEmpty(editor: LexicalEditor): boolean {
+  return editor.getEditorState().read(() => {
+    const root = $getRoot();
+    const children = root.getChildren();
+    return (
+      children.length === 0 ||
+      (children.length === 1 &&
+        children[0]!.getType() === "paragraph" &&
+        children[0]!.getTextContent() === "")
+    );
+  });
+}

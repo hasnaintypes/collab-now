@@ -9,7 +9,7 @@ import {
   DOCUMENT_TEMPLATES,
   isDocumentTemplateId,
 } from "@/features/documents/lib/document-templates";
-import { NOTES_TRANSFORMERS } from "./notes-transformers";
+import { NOTES_TRANSFORMERS, isEditorEmpty } from "./notes-transformers";
 
 /**
  * Client-side content-seeding for P4-1's document templates — the exact
@@ -41,18 +41,7 @@ export default function SeedTemplatePlugin({
 
     if (!isDocumentTemplateId(templateId)) return;
 
-    const isEmpty = editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const children = root.getChildren();
-      return (
-        children.length === 0 ||
-        (children.length === 1 &&
-          children[0]!.getType() === "paragraph" &&
-          children[0]!.getTextContent() === "")
-      );
-    });
-
-    if (!isEmpty) return;
+    if (!isEditorEmpty(editor)) return;
 
     const template = DOCUMENT_TEMPLATES[templateId];
     editor.update(() => {

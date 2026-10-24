@@ -6,7 +6,7 @@ import { $getRoot } from "lexical";
 import { $convertFromMarkdownString } from "@lexical/markdown";
 
 import { getGeneratedNotesForDocument } from "@/features/ingestion/actions/ingestion.actions";
-import { NOTES_TRANSFORMERS } from "./notes-transformers";
+import { NOTES_TRANSFORMERS, isEditorEmpty } from "./notes-transformers";
 
 /**
  * Client-side content-seeding (P1-8) — the piece `process-ingestion-job.ts`
@@ -44,18 +44,7 @@ export default function SeedNotesPlugin({ roomId }: { roomId: string }) {
     if (attempted.current) return;
     attempted.current = true;
 
-    const isEmpty = editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const children = root.getChildren();
-      return (
-        children.length === 0 ||
-        (children.length === 1 &&
-          children[0]!.getType() === "paragraph" &&
-          children[0]!.getTextContent() === "")
-      );
-    });
-
-    if (!isEmpty) return;
+    if (!isEditorEmpty(editor)) return;
 
     let cancelled = false;
 
