@@ -57,7 +57,7 @@ const { getEffectivePlanMock } = vi.hoisted(() => ({
 vi.mock("./workspace-plan", () => ({ getEffectivePlan: getEffectivePlanMock }));
 
 vi.mock("./plan-limits", () => ({
-  PLAN_NOTES_LIMIT: { free: 5, pro: 100, team: 100 },
+  PLAN_NOTES_LIMIT: { free: 5, pro: 100, team: 300 },
 }));
 
 const { reserveNotesGenerationSlot, releaseNotesGenerationSlot } =
