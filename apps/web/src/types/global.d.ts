@@ -28,4 +28,8 @@ declare type RoomMetadata = {
   creatorId: string;
   email: string;
   title: string;
+  /** P4-1: which starter template (if any) this document was created
+   * from — `seed-template-plugin.tsx` reads this to seed initial content
+   * on first open. Absent for a blank document. */
+  templateId?: string;
 };

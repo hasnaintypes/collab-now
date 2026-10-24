@@ -7,6 +7,8 @@ export type CreateDocumentParams = {
   userId: string;
   email: string;
   workspaceId?: string;
+  /** P4-1: optional starter template id — see `lib/document-templates.ts`. */
+  templateId?: string;
 };
 
 export type ShareDocumentParams = {

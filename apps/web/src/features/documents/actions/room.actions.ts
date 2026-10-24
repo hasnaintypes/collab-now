@@ -38,6 +38,7 @@ import {
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
 import { documentsTag, activityTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
+import { isDocumentTemplateId } from "../lib/document-templates";
 import type {
   CreateDocumentParams,
   ShareDocumentParams,
@@ -115,6 +116,7 @@ export const createDocument = async ({
   userId,
   email,
   workspaceId,
+  templateId,
 }: CreateDocumentParams): Promise<ActionResult<Room>> => {
   // Re-derive identity server-side rather than trusting the caller-supplied
   // `userId` — this is a server action, a spoofable trust boundary otherwise
@@ -147,10 +149,15 @@ export const createDocument = async ({
 
     const roomId = nanoid();
 
+    // Validated server-side rather than trusting the client's templateId
+    // verbatim — an unrecognized value is silently dropped (falls back to
+    // a blank document) rather than stored as metadata a client has no
+    // way to ever resolve back to real content.
     const metadata = {
       creatorId: userId,
       email,
       title: "Untitled document",
+      ...(isDocumentTemplateId(templateId) ? { templateId } : {}),
     };
 
     const usersAccesses: RoomAccesses = {

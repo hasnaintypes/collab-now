@@ -14,6 +14,18 @@ function selectChain(rows: unknown[]) {
   return builder;
 }
 
+// `countUserDocuments` (backing `createDocument`'s doc-limit check) ends at
+// `.where()` directly, no `.limit()` — it destructures a single-row count
+// result straight off the awaited query builder.
+function countChain(total: number) {
+  const builder: { from: () => typeof builder; leftJoin: () => typeof builder; where: () => Promise<unknown[]> } =
+    {} as never;
+  builder.from = vi.fn(() => builder);
+  builder.leftJoin = vi.fn(() => builder);
+  builder.where = vi.fn(() => Promise.resolve([{ count: total }]));
+  return builder;
+}
+
 const { dbMock, insertValues, deleteWhere } = vi.hoisted(() => {
   const insertValues = vi.fn(() => Promise.resolve(undefined));
   const deleteWhere = vi.fn(() => Promise.resolve(undefined));
@@ -27,9 +39,9 @@ const { dbMock, insertValues, deleteWhere } = vi.hoisted(() => {
 
 vi.mock("@collabnow/db", () => ({
   db: dbMock,
-  document: { id: "document.id", workspaceId: "document.workspace_id", roomId: "document.room_id" },
+  document: { id: "document.id", workspaceId: "document.workspace_id", roomId: "document.room_id", creatorId: "document.creator_id" },
   documentStar: { id: "document_star.id", documentId: "document_star.document_id", userId: "document_star.user_id" },
-  documentCollaborator: {},
+  documentCollaborator: { id: "document_collaborator.id", documentId: "document_collaborator.document_id", userId: "document_collaborator.user_id" },
   workspaceMember: {},
   activityLog: {},
   user: {},
@@ -41,12 +53,42 @@ vi.mock("next/cache", () => ({
   unstable_cache: (fn: unknown) => fn,
 }));
 
-const { toggleStarDocument } = await import("./room.actions");
+const { getSessionMock } = vi.hoisted(() => ({ getSessionMock: vi.fn() }));
+vi.mock("@/features/auth/lib", () => ({
+  auth: { api: { getSession: getSessionMock } },
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(() => Promise.resolve(new Headers())),
+}));
+
+const { createRoomMock } = vi.hoisted(() => ({ createRoomMock: vi.fn() }));
+vi.mock("@/lib/liveblocks", () => ({
+  liveblocks: { createRoom: createRoomMock },
+  getAccessType: vi.fn(),
+}));
+
+const { checkRateLimitMock } = vi.hoisted(() => ({ checkRateLimitMock: vi.fn() }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: checkRateLimitMock,
+  formatRetryAfter: (seconds: number) => `${seconds} seconds`,
+  RATE_LIMITS: {
+    documentCreate: { name: "document-create", limit: 20, windowMs: 10 * 60 * 1000 },
+    documentShare: { name: "document-share", limit: 30, windowMs: 60 * 60 * 1000 },
+  },
+}));
+
+const { toggleStarDocument, createDocument } = await import("./room.actions");
 
 beforeEach(() => {
   dbMock.select.mockReset();
   insertValues.mockClear();
   deleteWhere.mockClear();
+  getSessionMock.mockReset();
+  createRoomMock.mockReset();
+  checkRateLimitMock
+    .mockReset()
+    .mockResolvedValue({ success: true, limit: 20, remaining: 19 });
 });
 
 describe("toggleStarDocument", () => {
@@ -82,5 +124,85 @@ describe("toggleStarDocument", () => {
     expect(result).toEqual({ success: false, error: "Document not found." });
     expect(insertValues).not.toHaveBeenCalled();
     expect(deleteWhere).not.toHaveBeenCalled();
+  });
+});
+
+describe("createDocument", () => {
+  const params = { userId: "user-1", email: "user@example.com" };
+
+  it("rejects when the caller isn't signed in", async () => {
+    getSessionMock.mockResolvedValueOnce(null);
+
+    const result = await createDocument(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "You must be signed in to create a document.",
+    });
+    expect(createRoomMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the doc limit is already reached", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(countChain(50));
+
+    const result = await createDocument(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Document limit reached. You can have up to 50 documents.",
+    });
+    expect(createRoomMock).not.toHaveBeenCalled();
+  });
+
+  it("creates a blank document when no templateId is given", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(countChain(0));
+    createRoomMock.mockResolvedValueOnce({
+      id: "room-1",
+      metadata: { creatorId: "user-1", email: params.email, title: "Untitled document" },
+      usersAccesses: {},
+    });
+
+    const result = await createDocument(params);
+
+    expect(result.success).toBe(true);
+    const [, options] = createRoomMock.mock.calls[0]!;
+    expect(options.metadata).not.toHaveProperty("templateId");
+  });
+
+  it("stores a valid templateId in the room's metadata", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(countChain(0));
+    createRoomMock.mockResolvedValueOnce({
+      id: "room-1",
+      metadata: {
+        creatorId: "user-1",
+        email: params.email,
+        title: "Untitled document",
+        templateId: "meeting-notes",
+      },
+      usersAccesses: {},
+    });
+
+    await createDocument({ ...params, templateId: "meeting-notes" });
+
+    const [, options] = createRoomMock.mock.calls[0]!;
+    expect(options.metadata).toMatchObject({ templateId: "meeting-notes" });
+  });
+
+  it("silently drops an unrecognized templateId rather than storing it", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(countChain(0));
+    createRoomMock.mockResolvedValueOnce({
+      id: "room-1",
+      metadata: { creatorId: "user-1", email: params.email, title: "Untitled document" },
+      usersAccesses: {},
+    });
+
+    await createDocument({ ...params, templateId: "not-a-real-template" });
+
+    const [, options] = createRoomMock.mock.calls[0]!;
+    expect(options.metadata).not.toHaveProperty("templateId");
   });
 });

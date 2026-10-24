@@ -122,6 +122,7 @@ export default function CollaborativeRoom({
               scrollToHeadingRef={scrollToHeadingRef}
               exportRef={exportRef}
               documentTitle={roomMetadata.title}
+              templateId={roomMetadata.templateId}
               discussionOpen={discussionOpen}
               onDiscussionOpenChange={setDiscussionOpen}
               hasChatSource={hasChatSource}
