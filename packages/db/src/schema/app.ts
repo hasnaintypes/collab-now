@@ -301,7 +301,7 @@ export const documentChunk = pgTable(
 // `getOrCreateWorkspace`), so "Free"/"Pro" (individual) and "Team" (shared
 // seats, shared cap per PRD §6.12) are just the same `workspace`-scoped
 // subscription with more members attached, rather than two different
-// billing entities to reconcile. One row per workspace; `planId`/`status`
+// billing entities to reconcile. One row per workspace; `plan`/`status`
 // are plain `text` (not DB enums), matching `sourceType`/`status` elsewhere
 // in this schema — validated at the app layer. `paddleSubscriptionId`/
 // `paddleCustomerId` are nullable because a workspace defaults to the free
@@ -356,6 +356,11 @@ export const usageCounter = pgTable(
       table.workspaceId,
       table.periodStart
     ),
+    // Separate from the composite unique index above, matching the
+    // document/ingestionJob pattern elsewhere in this file — for a future
+    // "show this workspace's usage history" query (not just "this period's
+    // counter") once P3-4 needs one.
+    index("usage_counter_workspace_id_idx").on(table.workspaceId),
   ]
 );
 

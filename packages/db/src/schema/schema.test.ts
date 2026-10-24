@@ -331,6 +331,12 @@ describe("usageCounter", () => {
     );
     expect(uniqueIdx?.config.unique).toBe(true);
   });
+
+  it("has a workspaceId index for per-workspace usage-history lookups", () => {
+    const { indexes } = getTableConfig(usageCounter);
+    const names = indexes.map((i) => i.config.name);
+    expect(names).toContain("usage_counter_workspace_id_idx");
+  });
 });
 
 describe("rateLimitBucket", () => {
