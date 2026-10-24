@@ -12,6 +12,10 @@ describe("PLAN_NOTES_LIMIT", () => {
     expect(PLAN_NOTES_LIMIT.pro).toBeGreaterThan(PLAN_NOTES_LIMIT.free);
     expect(PLAN_NOTES_LIMIT.team).toBeGreaterThan(PLAN_NOTES_LIMIT.free);
   });
+
+  it("gives team a strictly higher cap than pro (P3-6 — shared across every seat, not a single-seat cap)", () => {
+    expect(PLAN_NOTES_LIMIT.team).toBeGreaterThan(PLAN_NOTES_LIMIT.pro);
+  });
 });
 
 describe("planIncludesChat", () => {
