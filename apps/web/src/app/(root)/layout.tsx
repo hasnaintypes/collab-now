@@ -8,6 +8,8 @@ import {
 import { getUsers, getDocumentUsers } from "@/features/documents/actions/user.actions";
 import { useSession } from "@/features/auth/lib/client";
 import { Loader2 } from "lucide-react";
+import CommandPalette from "@/components/shared/command-palette";
+import SaveShortcutToast from "@/components/shared/save-shortcut-toast";
 
 function Loader() {
   return (
@@ -20,6 +22,7 @@ function Loader() {
 export default function RootLayout({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const currentUserEmail = session?.user?.email || "";
+  const currentUserId = session?.user?.id;
 
   return (
     <LiveblocksProvider
@@ -43,6 +46,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <ClientSideSuspense fallback={<Loader />}>
         {children}
       </ClientSideSuspense>
+      {/* P4-2: Cmd/Ctrl+K and Cmd/Ctrl+S work on every page under this
+          layout (dashboard, settings, an open document, etc.), not just
+          wherever a page happens to render them — so they're mounted once
+          here rather than duplicated per page. */}
+      {currentUserId && <CommandPalette userId={currentUserId} />}
+      <SaveShortcutToast />
     </LiveblocksProvider>
   );
 }
