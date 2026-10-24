@@ -4,17 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { getDocumentsForUser } from "@/features/documents/actions/room.actions";
-import type { RoomDocument } from "@/features/documents/types";
+import { useDocumentSearch } from "@/features/documents/hooks/use-document-search";
 
-const SEARCH_DEBOUNCE_MS = 300;
 const RESULT_LIMIT = 8;
 
 /**
- * P4-2's Cmd/Ctrl+K document search palette. Reuses the exact same
- * `getDocumentsForUser({ search })` server action the dashboard's own
- * search box (`documents-section.tsx`) already calls — this is the same
- * search, just reachable from anywhere instead of only the dashboard.
+ * P4-2's Cmd/Ctrl+K document search palette. Shares `useDocumentSearch`
+ * with `documents-section.tsx`'s own search box — this is the same debounced
+ * search (and the same race-condition handling), reachable from anywhere
+ * instead of only the dashboard.
  *
  * Mounted once in `(root)/layout.tsx` (which already has the signed-in
  * session) so the shortcut works on every page under that layout,
@@ -23,23 +21,39 @@ const RESULT_LIMIT = 8;
 export default function CommandPalette({ userId }: { userId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<RoomDocument[]>([]);
-  const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const { query, setQuery, debouncedQuery, results, loading } =
+    useDocumentSearch(userId, { limit: RESULT_LIMIT });
+  const displayed = debouncedQuery.trim() ? results ?? [] : [];
+
+  // The single path every close goes through — Escape/outside-click (via
+  // Radix's onOpenChange), the Cmd/Ctrl+K toggle below, and selecting a
+  // result (openDocument below) all call this, so the query/selection
+  // always actually resets instead of only resetting on some close paths
+  // and leaving stale state behind for the next open.
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      if (!next) {
+        setQuery("");
+        setActiveIndex(0);
+      }
+    },
+    [setQuery]
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((prev) => !prev);
+        handleOpenChange(!open);
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [open, handleOpenChange]);
 
   useEffect(() => {
     if (!open) return;
@@ -49,69 +63,25 @@ export default function CommandPalette({ userId }: { userId: string }) {
     return () => clearTimeout(id);
   }, [open]);
 
-  // Query/results state is reset from the handlers that actually change
-  // `open`/`query` below (handleOpenChange, handleQueryChange) rather than
-  // reactively in an effect — a bare setState at the top of an effect body
-  // just to "reset on change" is what react-hooks/set-state-in-effect
-  // flags, and doing it in the handler is both simpler and avoids an
-  // extra render.
-  useEffect(() => {
-    if (!query.trim()) return;
-
-    debounceRef.current = setTimeout(async () => {
-      const result = await getDocumentsForUser(userId, {
-        search: query.trim(),
-        limit: RESULT_LIMIT,
-      });
-      setResults(result.success ? result.data.documents : []);
-      setActiveIndex(0);
-      setLoading(false);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, userId]);
-
-  const handleOpenChange = useCallback((next: boolean) => {
-    setOpen(next);
-    if (!next) {
-      setQuery("");
-      setResults([]);
-      setActiveIndex(0);
-    }
-  }, []);
-
-  const handleQueryChange = useCallback((value: string) => {
-    setQuery(value);
-    if (value.trim()) {
-      setLoading(true);
-    } else {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      setResults([]);
-      setLoading(false);
-    }
-  }, []);
-
   const openDocument = useCallback(
     (roomId: string) => {
-      setOpen(false);
+      handleOpenChange(false);
       router.push(`/documents/${roomId}`);
     },
-    [router]
+    [handleOpenChange, router]
   );
 
   const handleInputKeyDown = (event: React.KeyboardEvent) => {
-    if (results.length === 0) return;
+    if (displayed.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((i) => (i + 1) % results.length);
+      setActiveIndex((i) => (i + 1) % displayed.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((i) => (i - 1 + results.length) % results.length);
+      setActiveIndex((i) => (i - 1 + displayed.length) % displayed.length);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const selected = results[activeIndex];
+      const selected = displayed[activeIndex];
       if (selected) openDocument(selected.id);
     }
   };
@@ -128,7 +98,10 @@ export default function CommandPalette({ userId }: { userId: string }) {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActiveIndex(0);
+            }}
             onKeyDown={handleInputKeyDown}
             placeholder="Search documents…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -139,17 +112,17 @@ export default function CommandPalette({ userId }: { userId: string }) {
         </div>
 
         <div className="max-h-80 overflow-y-auto p-1.5">
-          {!loading && query.trim() && results.length === 0 && (
+          {!loading && debouncedQuery.trim() && displayed.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
               No documents found.
             </p>
           )}
-          {!query.trim() && (
+          {!debouncedQuery.trim() && (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
               Type to search your documents.
             </p>
           )}
-          {results.map((doc, index) => (
+          {displayed.map((doc, index) => (
             <button
               key={doc.id}
               onClick={() => openDocument(doc.id)}
