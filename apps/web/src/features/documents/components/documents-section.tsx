@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -12,18 +12,14 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn, dateConverter } from "@/lib/utils";
-import {
-  toggleStarDocument,
-  toggleArchiveDocument,
-  getDocumentsForUser,
-} from "../actions/room.actions";
+import { toggleStarDocument, toggleArchiveDocument, getDocumentsForUser } from "../actions/room.actions";
+import { useDocumentSearch } from "../hooks/use-document-search";
 import { Button } from "@/components/ui/button";
 import AddDocumentBtn from "./add-document-btn";
 import DeleteDocumentDialog from "./delete-document-dialog";
 import DashboardShareDialog from "./dashboard-share-dialog";
 import type { DocumentFilter, RoomDocument } from "../types";
 
-const SEARCH_DEBOUNCE_MS = 300;
 // Search always queries the full backing set (bounded by the 50-doc/user cap),
 // not just the currently loaded page, so results never regress relative to the
 // old client-side "search everything" behavior.
@@ -52,40 +48,16 @@ export default function DocumentsSection({
   // no reset-on-prop-change effect required.
   const [items, setItems] = useState<RoomDocument[]>(documents);
   const [cursor, setCursor] = useState<string | null>(nextCursor);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<RoomDocument[] | null>(null);
   const [isLoadingMore, startLoadMoreTransition] = useTransition();
-  const [isSearching, startSearchTransition] = useTransition();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounce search query
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
-
-  // Search queries the server for the full matching set instead of filtering
-  // only the currently-loaded page.
-  useEffect(() => {
-    startSearchTransition(async () => {
-      if (!debouncedQuery) {
-        setSearchResults(null);
-        return;
-      }
-      const result = await getDocumentsForUser(userId, {
-        filter: activeFilter,
-        search: debouncedQuery,
-        limit: SEARCH_RESULT_LIMIT,
-      });
-      setSearchResults(result.success ? result.data.documents : []);
-    });
-  }, [debouncedQuery, activeFilter, userId]);
+  const {
+    query,
+    setQuery,
+    debouncedQuery,
+    results: searchResults,
+    setResults: setSearchResults,
+    loading: isSearching,
+  } = useDocumentSearch(userId, { filter: activeFilter, limit: SEARCH_RESULT_LIMIT });
 
   const applyToggle = (
     list: RoomDocument[],
@@ -128,7 +100,11 @@ export default function DocumentsSection({
     });
   };
 
-  const displayed = searchResults ?? items;
+  // Gated on `debouncedQuery` rather than `searchResults`'s nullness —
+  // `useDocumentSearch` deliberately leaves stale results in place when the
+  // query is cleared rather than resetting them, so nullness alone can't
+  // tell "not searching" apart from "a search that hasn't resolved yet".
+  const displayed = debouncedQuery.trim() ? searchResults ?? [] : items;
 
   const filterLabels: Record<string, string> = {
     recent: "Recent Documents",
