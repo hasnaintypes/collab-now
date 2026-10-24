@@ -310,6 +310,12 @@ describe("subscription", () => {
     expect(paddleSubscriptionId?.isUnique).toBe(true);
     expect(paddleCustomerId?.notNull).toBe(false);
   });
+
+  it("allows lastEventAt to be null before any webhook has been applied (P3-3)", () => {
+    const { columns } = getTableConfig(subscription);
+    const lastEventAt = columns.find((c) => c.name === "last_event_at");
+    expect(lastEventAt?.notNull).toBe(false);
+  });
 });
 
 describe("usageCounter", () => {
