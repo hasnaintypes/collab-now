@@ -295,6 +295,75 @@ export const documentChunk = pgTable(
   ]
 );
 
+// ── Subscription ─────────────────────────────────────────────
+// P3-1 / PRD §9: billing is scoped to the workspace, not the individual
+// user — a personal account is already a single-member workspace (see
+// `getOrCreateWorkspace`), so "Free"/"Pro" (individual) and "Team" (shared
+// seats, shared cap per PRD §6.12) are just the same `workspace`-scoped
+// subscription with more members attached, rather than two different
+// billing entities to reconcile. One row per workspace; `plan`/`status`
+// are plain `text` (not DB enums), matching `sourceType`/`status` elsewhere
+// in this schema — validated at the app layer. `paddleSubscriptionId`/
+// `paddleCustomerId` are nullable because a workspace defaults to the free
+// plan with no Paddle subscription until it upgrades (P3-2).
+
+export const subscription = pgTable("subscription", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => nanoid()),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .unique()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  /** "free" | "pro" | "team" */
+  plan: text("plan").notNull().default("free"),
+  /** "active" | "canceled" | "past_due" | "paused" — mirrors Paddle's own subscription statuses. */
+  status: text("status").notNull().default("active"),
+  paddleSubscriptionId: text("paddle_subscription_id").unique(),
+  paddleCustomerId: text("paddle_customer_id"),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── Usage Counter ────────────────────────────────────────────
+// P3-1 / PRD §9 & FR-20: notes-generated count for a workspace's current
+// billing period, checked before enqueueing a new ingestion job (P3-4).
+// Scoped to `workspaceId` for the same reason as `subscription` above — a
+// Team plan's cap is shared across its seats. One row per
+// (workspace, periodStart) so the future enforcement step can upsert
+// idempotently rather than needing a separate "find or create this
+// period's counter" step.
+
+export const usageCounter = pgTable(
+  "usage_counter",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    periodStart: timestamp("period_start").notNull(),
+    periodEnd: timestamp("period_end").notNull(),
+    notesGenerated: integer("notes_generated").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("usage_counter_workspace_id_period_start_idx").on(
+      table.workspaceId,
+      table.periodStart
+    ),
+    // Separate from the composite unique index above, matching the
+    // document/ingestionJob pattern elsewhere in this file — for a future
+    // "show this workspace's usage history" query (not just "this period's
+    // counter") once P3-4 needs one.
+    index("usage_counter_workspace_id_idx").on(table.workspaceId),
+  ]
+);
+
 // ── Activity Log ─────────────────────────────────────────────
 
 export const activityLog = pgTable(

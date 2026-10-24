@@ -16,6 +16,8 @@ import {
   ingestionJob,
   sourceContent,
   documentChunk,
+  subscription,
+  usageCounter,
   rateLimitBucket,
 } from "./index";
 
@@ -276,6 +278,64 @@ describe("documentChunk", () => {
       (i) => i.config.name === "document_chunk_embedding_idx"
     );
     expect(embeddingIdx?.config.method).toBe("hnsw");
+  });
+});
+
+describe("subscription", () => {
+  it("cascades delete when its workspace is deleted", () => {
+    expect(foreignKey(subscription, "workspace_id").onDelete).toBe("cascade");
+  });
+
+  it("only allows one subscription per workspace", () => {
+    const { columns } = getTableConfig(subscription);
+    const workspaceId = columns.find((c) => c.name === "workspace_id");
+    expect(workspaceId?.isUnique).toBe(true);
+  });
+
+  it("defaults to the free plan with active status", () => {
+    const { columns } = getTableConfig(subscription);
+    const plan = columns.find((c) => c.name === "plan");
+    const status = columns.find((c) => c.name === "status");
+    expect(plan?.default).toBe("free");
+    expect(status?.default).toBe("active");
+  });
+
+  it("allows paddleSubscriptionId/paddleCustomerId to be null for a free-plan workspace", () => {
+    const { columns } = getTableConfig(subscription);
+    const paddleSubscriptionId = columns.find(
+      (c) => c.name === "paddle_subscription_id"
+    );
+    const paddleCustomerId = columns.find((c) => c.name === "paddle_customer_id");
+    expect(paddleSubscriptionId?.notNull).toBe(false);
+    expect(paddleSubscriptionId?.isUnique).toBe(true);
+    expect(paddleCustomerId?.notNull).toBe(false);
+  });
+});
+
+describe("usageCounter", () => {
+  it("cascades delete when its workspace is deleted", () => {
+    expect(foreignKey(usageCounter, "workspace_id").onDelete).toBe("cascade");
+  });
+
+  it("defaults notesGenerated to 0", () => {
+    const { columns } = getTableConfig(usageCounter);
+    const notesGenerated = columns.find((c) => c.name === "notes_generated");
+    expect(notesGenerated?.notNull).toBe(true);
+    expect(notesGenerated?.default).toBe(0);
+  });
+
+  it("only allows one counter row per (workspace, periodStart) pair", () => {
+    const { indexes } = getTableConfig(usageCounter);
+    const uniqueIdx = indexes.find(
+      (i) => i.config.name === "usage_counter_workspace_id_period_start_idx"
+    );
+    expect(uniqueIdx?.config.unique).toBe(true);
+  });
+
+  it("has a workspaceId index for per-workspace usage-history lookups", () => {
+    const { indexes } = getTableConfig(usageCounter);
+    const names = indexes.map((i) => i.config.name);
+    expect(names).toContain("usage_counter_workspace_id_idx");
   });
 });
 

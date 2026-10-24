@@ -93,7 +93,7 @@ Drizzle ORM against Neon serverless Postgres. Schema files: `packages/db/src/sch
 
 ### Planned but not yet built
 
-Per `docs/PRD.md` §6.8–6.12 and confirmed absent from the codebase: Paddle billing. None of the corresponding tables (`subscription`, `usage_counter`) or env vars (Paddle keys) exist yet — see `docs/ROADMAP.md` for the phased build order before writing code toward these features.
+Per `docs/PRD.md` §6.8–6.12 and confirmed absent from the codebase: Paddle billing. P3-1 added the `subscription` and `usage_counter` tables (`packages/db/src/schema/app.ts`) — both scoped to `workspaceId` rather than `userId`, since a personal account is already a single-member workspace and Team plans share a cap across seats (PRD §6.12) — but nothing reads or writes them yet: no checkout flow, no webhook handler, no usage enforcement before enqueueing an ingestion job. `apps/web/.env.example`'s Paddle vars (from P0-15) are still unpopulated placeholders. See `docs/ROADMAP.md` for the phased build order (P3-2 through P3-6) before writing code toward these features.
 
 ## Git & commits
 
