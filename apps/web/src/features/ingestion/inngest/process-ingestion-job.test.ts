@@ -53,7 +53,7 @@ vi.mock("@/lib/liveblocks/client", () => ({
 }));
 
 vi.mock("next/cache", () => ({
-  updateTag: vi.fn(),
+  revalidateTag: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
