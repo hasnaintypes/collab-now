@@ -135,9 +135,12 @@ beforeEach(() => {
     .mockResolvedValue({ success: true, limit: 10, remaining: 9 });
   inngestSendMock.mockReset().mockResolvedValue(undefined);
   generateNotesMock.mockReset().mockResolvedValue("regenerated notes");
-  reserveNotesGenerationSlotMock
-    .mockReset()
-    .mockResolvedValue({ allowed: true, limit: 5, used: 1 });
+  reserveNotesGenerationSlotMock.mockReset().mockResolvedValue({
+    allowed: true,
+    limit: 5,
+    used: 1,
+    periodStart: new Date("2026-01-01T00:00:00.000Z"),
+  });
   releaseNotesGenerationSlotMock.mockReset().mockResolvedValue(undefined);
 });
 
@@ -265,7 +268,32 @@ describe("enqueueIngestionJob", () => {
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" })
     );
-    expect(releaseNotesGenerationSlotMock).toHaveBeenCalledWith("ws-1");
+    expect(releaseNotesGenerationSlotMock).toHaveBeenCalledWith(
+      "ws-1",
+      new Date("2026-01-01T00:00:00.000Z")
+    );
+    consoleError.mockRestore();
+  });
+
+  it("releases the reserved usage slot even when the job row itself fails to insert", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select.mockReturnValueOnce(selectChain([{ id: "member-1" }]));
+    insertValues.mockRejectedValueOnce(new Error("constraint violation"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await enqueueIngestionJob(params);
+
+    expect(result).toEqual({
+      success: false,
+      error: "Failed to queue this job. Please try again.",
+    });
+    expect(inngestSendMock).not.toHaveBeenCalled();
+    expect(releaseNotesGenerationSlotMock).toHaveBeenCalledWith(
+      "ws-1",
+      new Date("2026-01-01T00:00:00.000Z")
+    );
     consoleError.mockRestore();
   });
 });

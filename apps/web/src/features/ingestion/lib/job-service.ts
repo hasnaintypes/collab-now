@@ -73,16 +73,16 @@ export async function enqueueIngestionJobForUser({
 
     const jobId = nanoid();
 
-    await db.insert(ingestionJob).values({
-      id: jobId,
-      sourceUrl,
-      sourceType,
-      requesterId: userId,
-      workspaceId,
-      status: "queued",
-    });
-
     try {
+      await db.insert(ingestionJob).values({
+        id: jobId,
+        sourceUrl,
+        sourceType,
+        requesterId: userId,
+        workspaceId,
+        status: "queued",
+      });
+
       await inngest.send(
         ingestionJobRequested.create({
           jobId,
@@ -93,9 +93,12 @@ export async function enqueueIngestionJobForUser({
         })
       );
     } catch (error) {
-      // The job row already exists at this point — if it can't actually be
-      // queued, mark it failed right away instead of leaving it stuck at
-      // "queued" forever with nothing to ever pick it up.
+      // Covers both failure points above: if the insert itself never
+      // landed, there's no job row to mark failed (the update below is
+      // then a harmless no-op), but the usage slot was still reserved and
+      // must still be released either way — a generation attempt that
+      // never ran, for any reason, shouldn't permanently consume one of
+      // the workspace's monthly slots.
       await db
         .update(ingestionJob)
         .set({
@@ -105,9 +108,7 @@ export async function enqueueIngestionJobForUser({
         })
         .where(eq(ingestionJob.id, jobId));
 
-      // The job never actually got queued — don't charge the workspace's
-      // monthly cap for a generation attempt that will never run.
-      await releaseNotesGenerationSlot(workspaceId);
+      await releaseNotesGenerationSlot(workspaceId, usage.periodStart);
 
       console.error(error);
       throw new ActionError("Failed to queue this job. Please try again.");

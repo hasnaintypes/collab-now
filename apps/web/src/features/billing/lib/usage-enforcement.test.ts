@@ -81,7 +81,13 @@ describe("reserveNotesGenerationSlot", () => {
 
     const result = await reserveNotesGenerationSlot("workspace-1");
 
-    expect(result).toEqual({ allowed: true, limit: 5, used: 1 });
+    expect(result).toEqual({
+      allowed: true,
+      limit: 5,
+      used: 1,
+      periodStart: result.periodStart,
+    });
+    expect(result.periodStart).toBeInstanceOf(Date);
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: "workspace-1", notesGenerated: 1 })
     );
@@ -96,13 +102,27 @@ describe("reserveNotesGenerationSlot", () => {
     expect(result.limit).toBe(100);
   });
 
+  it("falls back to the free plan's limit if the effective plan isn't one of the three known keys", async () => {
+    getEffectivePlanMock.mockResolvedValueOnce("enterprise" as never);
+    returningMock.mockResolvedValueOnce([{ notesGenerated: 1 }]);
+
+    const result = await reserveNotesGenerationSlot("workspace-1");
+
+    expect(result.limit).toBe(5);
+  });
+
   it("blocks the reservation when the WHERE guard skips the update (already at the cap)", async () => {
     returningMock.mockResolvedValueOnce([]); // conflict, but WHERE blocked it
     selectMock.mockReturnValueOnce(selectChain([{ notesGenerated: 5 }]));
 
     const result = await reserveNotesGenerationSlot("workspace-1");
 
-    expect(result).toEqual({ allowed: false, limit: 5, used: 5 });
+    expect(result).toEqual({
+      allowed: false,
+      limit: 5,
+      used: 5,
+      periodStart: result.periodStart,
+    });
   });
 
   it("falls back to the configured limit as 'used' if the follow-up read unexpectedly finds nothing", async () => {
@@ -111,13 +131,16 @@ describe("reserveNotesGenerationSlot", () => {
 
     const result = await reserveNotesGenerationSlot("workspace-1");
 
-    expect(result).toEqual({ allowed: false, limit: 5, used: 5 });
+    expect(result.allowed).toBe(false);
+    expect(result.used).toBe(5);
   });
 });
 
 describe("releaseNotesGenerationSlot", () => {
-  it("updates the counter for the current period", async () => {
-    await releaseNotesGenerationSlot("workspace-1");
+  it("updates the counter for the given period, not a freshly recomputed 'now'", async () => {
+    const reservedPeriodStart = new Date("2026-03-01T00:00:00.000Z");
+
+    await releaseNotesGenerationSlot("workspace-1", reservedPeriodStart);
 
     expect(updateMock).toHaveBeenCalled();
     expect(setMock).toHaveBeenCalled();

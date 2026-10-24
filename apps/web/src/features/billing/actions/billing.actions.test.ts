@@ -118,6 +118,20 @@ describe("getWorkspaceSubscription", () => {
       data: { plan: "pro", status: "active" },
     });
   });
+
+  it("reports the free plan for a canceled subscription, matching what P3-4's enforcement actually grants", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    dbMock.select
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }]))
+      .mockReturnValueOnce(selectChain([{ plan: "team", status: "canceled" }]));
+
+    const result = await getWorkspaceSubscription("workspace-1");
+
+    expect(result).toEqual({
+      success: true,
+      data: { plan: "free", status: "canceled" },
+    });
+  });
 });
 
 describe("createCheckoutTransaction", () => {

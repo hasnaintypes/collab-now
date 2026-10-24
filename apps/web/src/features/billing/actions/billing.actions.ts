@@ -13,6 +13,7 @@ import {
 } from "@/lib/action-result";
 import { createPaddleTransaction } from "../lib/paddle-api";
 import { PADDLE_PRICE_IDS } from "../lib/paddle-config";
+import { resolveEffectivePlan } from "../lib/workspace-plan";
 import type { PaidPlanId, WorkspaceSubscription } from "../types";
 
 /**
@@ -40,9 +41,14 @@ export const getWorkspaceSubscription = async (
       .where(eq(subscription.workspaceId, workspaceId))
       .limit(1);
 
-    return (row as WorkspaceSubscription | undefined) ?? {
-      plan: "free",
-      status: "active",
+    // The displayed plan must match what's actually enforced — a
+    // canceled/past-due subscription keeps its raw `plan` value on the
+    // row by design (P3-3), so this can't just return it verbatim, or
+    // Settings could show "Team" to a workspace job-service.ts/
+    // chat.actions.ts are already enforcing as free.
+    return {
+      plan: resolveEffectivePlan(row),
+      status: row?.status ?? "active",
     };
   }, "Failed to load billing information.");
 };

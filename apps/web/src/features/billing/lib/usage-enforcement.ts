@@ -8,6 +8,12 @@ export type UsageReservationResult = {
   allowed: boolean;
   limit: number;
   used: number;
+  /** The exact period this reservation was made against — callers that
+   * might later need to release it (`job-service.ts`) must pass this back
+   * to `releaseNotesGenerationSlot` rather than letting it recompute
+   * "now" itself, which could land in a different calendar month if the
+   * release happens right around a UTC month boundary. */
+  periodStart: Date;
 };
 
 /**
@@ -32,7 +38,13 @@ export async function reserveNotesGenerationSlot(
   workspaceId: string
 ): Promise<UsageReservationResult> {
   const plan = await getEffectivePlan(workspaceId);
-  const limit = PLAN_NOTES_LIMIT[plan];
+  // `subscription.plan` is a plain unconstrained `text` column (validated
+  // at the app layer, not the DB) — fall back to Free's limit rather than
+  // an `undefined` one if it ever holds something outside the three known
+  // plans, which would otherwise make the `< limit` guard below compare
+  // against `NULL` and silently block every reservation for that
+  // workspace, even at zero usage.
+  const limit = PLAN_NOTES_LIMIT[plan] ?? PLAN_NOTES_LIMIT.free;
   const { periodStart, periodEnd } = currentUsagePeriod();
 
   const [reserved] = await db
@@ -49,7 +61,7 @@ export async function reserveNotesGenerationSlot(
     .returning({ notesGenerated: usageCounter.notesGenerated });
 
   if (reserved) {
-    return { allowed: true, limit, used: reserved.notesGenerated };
+    return { allowed: true, limit, used: reserved.notesGenerated, periodStart };
   }
 
   // The WHERE guard blocked the update — already at/over the limit for
@@ -67,21 +79,27 @@ export async function reserveNotesGenerationSlot(
     )
     .limit(1);
 
-  return { allowed: false, limit, used: existing?.notesGenerated ?? limit };
+  return { allowed: false, limit, used: existing?.notesGenerated ?? limit, periodStart };
 }
 
 /**
  * Releases a slot reserved by `reserveNotesGenerationSlot` when the job it
  * was reserved for never actually got queued (`job-service.ts`'s
- * `inngest.send` failure path) — a workspace shouldn't be charged quota
- * for a job that never ran. Floors at 0 via `GREATEST` rather than letting
- * concurrent reserve/release calls push the count negative.
+ * insert/`inngest.send` failure path) — a workspace shouldn't be charged
+ * quota for a job that never ran. Floors at 0 via `GREATEST` rather than
+ * letting concurrent reserve/release calls push the count negative.
+ *
+ * `periodStart` must be the one `reserveNotesGenerationSlot` returned for
+ * the reservation being released, not freshly recomputed — recomputing
+ * "now" here could land in a different calendar month than the
+ * reservation if the release happens right around a UTC month boundary,
+ * in which case this would silently update zero rows and the original
+ * period's counter would stay over-incremented forever.
  */
 export async function releaseNotesGenerationSlot(
-  workspaceId: string
+  workspaceId: string,
+  periodStart: Date
 ): Promise<void> {
-  const { periodStart } = currentUsagePeriod();
-
   await db
     .update(usageCounter)
     .set({
