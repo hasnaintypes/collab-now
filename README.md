@@ -7,7 +7,7 @@ A real-time collaborative document editor built for modern teams. Create, edit, 
 
 This repo is a **Turborepo monorepo** with a feature-based (screaming architecture) app structure.
 
-**Status:** Core collaboration and the AI notes-from-URL MVP are shipped and in active use. Multiple note styles, "Ask about this" RAG chat, a functional browser extension, and Paddle billing are planned next — see [Roadmap](#roadmap).
+**Status:** Core collaboration, the AI notes-from-URL MVP, multiple note styles, "Ask about this" RAG chat, a functional browser extension, and Paddle billing (checkout, webhooks, usage enforcement) are all shipped and in active use. Document templates, keyboard shortcuts, and workspace-wide chat are next — see [Roadmap](#roadmap).
 
 ## Tech Stack
 
@@ -181,8 +181,8 @@ Work is tracked as GitHub issues, phased and labeled `phase-0` through `phase-4`
 |:---|:---|:---:|
 | **0 — Foundation** | Auth completeness, data-layer fixes, error handling, rate limiting, tests, CI, AI/billing infra prep | ✅ Shipped |
 | **1 — Ingestion MVP** | Paste a YouTube/article URL → validated, translated, summarized (Gemini) → saved as a document | ✅ Shipped |
-| **2 — Notes UX, Chat, Extension** | Additional note styles (Cornell, Mind-Map, Q&A, Executive Summary), "Ask about this" RAG chat, a functional browser extension | 🚧 Planned |
-| **3 — Billing** | Paddle checkout, webhooks, usage tracking/enforcement | 🚧 In progress |
+| **2 — Notes UX, Chat, Extension** | Additional note styles (Cornell, Mind-Map, Q&A, Executive Summary), "Ask about this" RAG chat, a functional browser extension | ✅ Shipped |
+| **3 — Billing** | Paddle checkout, webhooks, usage tracking/enforcement | ✅ Shipped |
 | **4 — Backlog** | Document templates, keyboard shortcuts, workspace-wide chat | 📋 Deferred |
 
 See open/closed issues on GitHub for the full, itemized breakdown.
