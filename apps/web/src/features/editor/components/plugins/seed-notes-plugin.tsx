@@ -3,15 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getRoot } from "lexical";
-import {
-  $convertFromMarkdownString,
-  HEADING,
-  ORDERED_LIST,
-  TEXT_FORMAT_TRANSFORMERS,
-  UNORDERED_LIST,
-} from "@lexical/markdown";
+import { $convertFromMarkdownString } from "@lexical/markdown";
 
 import { getGeneratedNotesForDocument } from "@/features/ingestion/actions/ingestion.actions";
+import { NOTES_TRANSFORMERS, isEditorEmpty } from "./notes-transformers";
 
 /**
  * Client-side content-seeding (P1-8) — the piece `process-ingestion-job.ts`
@@ -38,12 +33,6 @@ import { getGeneratedNotesForDocument } from "@/features/ingestion/actions/inges
  * notes. Accepted for now rather than adding a `source_content` column to
  * track "already seeded" explicitly; revisit if that turns out to matter.
  */
-const NOTES_TRANSFORMERS = [
-  HEADING,
-  UNORDERED_LIST,
-  ORDERED_LIST,
-  ...TEXT_FORMAT_TRANSFORMERS,
-];
 
 export default function SeedNotesPlugin({ roomId }: { roomId: string }) {
   const [editor] = useLexicalComposerContext();
@@ -55,18 +44,7 @@ export default function SeedNotesPlugin({ roomId }: { roomId: string }) {
     if (attempted.current) return;
     attempted.current = true;
 
-    const isEmpty = editor.getEditorState().read(() => {
-      const root = $getRoot();
-      const children = root.getChildren();
-      return (
-        children.length === 0 ||
-        (children.length === 1 &&
-          children[0]!.getType() === "paragraph" &&
-          children[0]!.getTextContent() === "")
-      );
-    });
-
-    if (!isEmpty) return;
+    if (!isEditorEmpty(editor)) return;
 
     let cancelled = false;
 

@@ -25,6 +25,7 @@ import FloatingToolbar from "./plugins/floating-toolbar";
 import WordCountPlugin from "./plugins/word-count-plugin";
 import { ExportBridge, type ExportFunctions } from "./plugins/export-plugin";
 import SeedNotesPlugin from "./plugins/seed-notes-plugin";
+import SeedTemplatePlugin from "./plugins/seed-template-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
 import Comments from "@/features/comments/components/comments";
 import ChatPanel from "@/features/chat/components/chat-panel";
@@ -102,6 +103,7 @@ export function Editor({
   scrollToHeadingRef,
   exportRef,
   documentTitle,
+  templateId,
   discussionOpen,
   onDiscussionOpenChange,
   hasChatSource = false,
@@ -115,6 +117,8 @@ export function Editor({
   scrollToHeadingRef: React.MutableRefObject<((key: string) => void) | null>;
   exportRef?: React.MutableRefObject<ExportFunctions | null>;
   documentTitle?: string;
+  /** P4-1: the room metadata's templateId, if this document was created from a starter template. */
+  templateId?: string;
   discussionOpen?: boolean;
   onDiscussionOpenChange?: (open: boolean) => void;
   /** P2-5: whether this document has any indexed chunks to chat about. */
@@ -148,6 +152,7 @@ export function Editor({
           synced — checking emptiness before that would race against the
           real synced state (see seed-notes-plugin.tsx). */}
       {status && <SeedNotesPlugin roomId={roomId} />}
+      {status && <SeedTemplatePlugin templateId={templateId} />}
 
       <div className="flex flex-1 w-full">
         {/* Editor Content Canvas */}

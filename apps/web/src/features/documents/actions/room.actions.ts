@@ -38,6 +38,7 @@ import {
 import { sendMail, documentShareEmailHtml } from "@collabnow/email";
 import { documentsTag, activityTag } from "@/lib/cache-tags";
 import { encodeCursor, decodeCursor } from "@/lib/pagination";
+import { DOCUMENT_TEMPLATES, isDocumentTemplateId } from "../lib/document-templates";
 import type {
   CreateDocumentParams,
   ShareDocumentParams,
@@ -115,6 +116,7 @@ export const createDocument = async ({
   userId,
   email,
   workspaceId,
+  templateId,
 }: CreateDocumentParams): Promise<ActionResult<Room>> => {
   // Re-derive identity server-side rather than trusting the caller-supplied
   // `userId` — this is a server action, a spoofable trust boundary otherwise
@@ -147,10 +149,22 @@ export const createDocument = async ({
 
     const roomId = nanoid();
 
+    // Validated server-side rather than trusting the client's templateId
+    // verbatim — an unrecognized value is silently dropped (falls back to
+    // a blank document) rather than stored as metadata a client has no
+    // way to ever resolve back to real content. A valid one also names the
+    // document after its template (e.g. "Meeting Notes") instead of the
+    // generic default — that's the whole point of the picker showing
+    // template names in the first place.
+    const title = isDocumentTemplateId(templateId)
+      ? DOCUMENT_TEMPLATES[templateId].label
+      : "Untitled document";
+
     const metadata = {
       creatorId: userId,
       email,
-      title: "Untitled document",
+      title,
+      ...(isDocumentTemplateId(templateId) ? { templateId } : {}),
     };
 
     const usersAccesses: RoomAccesses = {
@@ -167,7 +181,7 @@ export const createDocument = async ({
     if (workspaceId) {
       await db.insert(document).values({
         roomId,
-        title: "Untitled document",
+        title,
         creatorId: userId,
         workspaceId,
       });
@@ -176,7 +190,7 @@ export const createDocument = async ({
         workspaceId,
         userId,
         action: "created",
-        metadata: JSON.stringify({ roomId, title: "Untitled document" }),
+        metadata: JSON.stringify({ roomId, title }),
       });
 
       updateTag(activityTag(workspaceId));
