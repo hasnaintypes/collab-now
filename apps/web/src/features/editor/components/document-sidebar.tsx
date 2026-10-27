@@ -1,196 +1,184 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { Pencil, FileText, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { updateDocument } from "@/features/documents/actions/room.actions";
+import { useLayoutEffect, useRef, useState } from "react";
+import { PanelLeft, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HeadingEntry } from "./plugins/heading-outline-plugin";
 
-type SidebarProps = {
-  roomId: string;
-  title: string;
-  currentUserType: UserType;
-  currentUserName: string;
+type SidebarContentProps = {
   headings: HeadingEntry[];
   activeHeadingKey: string | null;
   onScrollToHeading: (key: string) => void;
+  onClose: () => void;
 };
 
-export function DocumentSidebarContent(props: SidebarProps) {
-  return <SidebarInner {...props} />;
-}
-
-export default function DocumentSidebar(props: SidebarProps) {
-  return (
-    <aside className="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex-col py-6 bg-muted/50 border-r border-border/50 hidden lg:flex overflow-y-auto no-scrollbar">
-      <SidebarInner {...props} />
-    </aside>
-  );
-}
-
-function SidebarInner({
-  roomId,
-  title,
-  currentUserType,
-  currentUserName,
+/**
+ * Header ("Document outline" + divider) stays put while the list scrolls
+ * underneath it — matching Google Docs' outline panel, where scrolled-past
+ * items disappear behind the heading/divider rather than scrolling up over
+ * it. Achieved by keeping the header out of the `overflow-y-auto` region
+ * rather than inside it.
+ */
+export function DocumentSidebarContent({
   headings,
   activeHeadingKey,
   onScrollToHeading,
-}: SidebarProps) {
-  const [documentTitle, setDocumentTitle] = useState(title);
-  const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [outlineVisible, setOutlineVisible] = useState(true);
+  onClose,
+}: SidebarContentProps) {
+  const navRef = useRef<HTMLElement>(null);
+  const [truncated, setTruncated] = useState<Map<string, string>>(new Map());
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Manual truncation, not CSS `text-overflow: ellipsis` — verified live
+   * (DOM: `scrollWidth > clientWidth`, `text-overflow: ellipsis`,
+   * `white-space: nowrap` all correctly applied) that this browser simply
+   * never paints the automatic "…" here, it just hard-clips. A plain "…"
+   * character typed into the DOM *does* render fine, so instead of relying
+   * on the browser's automatic ellipsis we measure against a hidden clone
+   * styled from each button's own live `getComputedStyle` (not a guessed
+   * font stack — that was tried before and drifted out of sync with the
+   * real font, which is how the "…" itself ended up clipped) and binary-
+   * search the longest substring + "…" that actually fits.
+   */
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
 
-  const handleTitleKeyDown = async (
-    e: React.KeyboardEvent<HTMLInputElement>
-  ) => {
-    if (e.key === "Enter") {
-      setLoading(true);
-      if (documentTitle !== title) {
-        const result = await updateDocument(roomId, documentTitle);
-        if (result.success) {
-          setEditing(false);
-        } else {
-          console.error(`Failed to update title: ${result.error}`);
+    const measurer = document.createElement("span");
+    measurer.style.cssText =
+      "position:absolute; visibility:hidden; white-space:nowrap; left:-9999px; top:-9999px;";
+    document.body.appendChild(measurer);
+
+    const next = new Map<string, string>();
+    nav
+      .querySelectorAll<HTMLButtonElement>("button[data-heading-key]")
+      .forEach((btn) => {
+        const key = btn.dataset.headingKey!;
+        const fullText = btn.dataset.headingText!;
+        const cs = getComputedStyle(btn);
+        measurer.style.fontSize = cs.fontSize;
+        measurer.style.fontWeight = cs.fontWeight;
+        measurer.style.fontFamily = cs.fontFamily;
+        measurer.style.letterSpacing = cs.letterSpacing;
+
+        // -2px safety buffer: `scrollWidth`/`clientWidth` are both rounded
+        // to whole pixels, so a "fits exactly" result can still have the
+        // trailing "…" sitting flush against the clip boundary and get
+        // chopped by sub-pixel layout rounding in the real (unrounded)
+        // render.
+        const maxWidth =
+          btn.clientWidth -
+          parseFloat(cs.paddingLeft) -
+          parseFloat(cs.paddingRight) -
+          2;
+
+        measurer.textContent = fullText;
+        if (measurer.scrollWidth <= maxWidth) {
+          next.set(key, fullText);
+          return;
         }
-      }
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
-        setEditing(false);
-        updateDocument(roomId, documentTitle);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [roomId, documentTitle]);
+        let low = 0;
+        let high = fullText.length;
+        while (low < high) {
+          const mid = Math.ceil((low + high) / 2);
+          measurer.textContent = `${fullText.slice(0, mid).trimEnd()}…`;
+          if (measurer.scrollWidth <= maxWidth) {
+            low = mid;
+          } else {
+            high = mid - 1;
+          }
+        }
+        next.set(key, `${fullText.slice(0, low).trimEnd()}…`);
+      });
 
-  useEffect(() => {
-    if (editing && inputRef.current) inputRef.current.focus();
-  }, [editing]);
+    document.body.removeChild(measurer);
+    // Unlike the setState-in-effect cases restructured in
+    // use-document-search.ts, this value genuinely can't be computed
+    // during render — it depends on each button's actual mounted layout
+    // (clientWidth, computed font metrics), which only exists once the
+    // DOM has painted. That's exactly what `useLayoutEffect` is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTruncated(next);
+  }, [headings]);
 
   return (
-    <>
-      {/* Document Title */}
-      <div className="px-5 mb-6">
-        <div ref={containerRef} className="flex items-center gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center bg-primary text-primary-foreground text-xs font-bold rounded-sm">
-            <FileText className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            {editing && !loading ? (
-              <Input
-                type="text"
-                value={documentTitle}
-                ref={inputRef}
-                placeholder="Enter title"
-                onChange={(e) => setDocumentTitle(e.target.value)}
-                onKeyDown={handleTitleKeyDown}
-                className="h-7 w-full border-border/50 text-xs font-bold"
-              />
-            ) : (
-              <button
-                onClick={() =>
-                  currentUserType === "editor" && setEditing(true)
-                }
-                className="group flex items-center gap-1 w-full text-left"
-              >
-                <p className="text-sm font-bold truncate tracking-tight">
-                  {documentTitle}
-                </p>
-                {currentUserType === "editor" && (
-                  <Pencil className="size-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                )}
-              </button>
-            )}
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {currentUserName}
-            </p>
-            {loading && (
-              <span className="text-[10px] text-muted-foreground">
-                saving...
-              </span>
-            )}
-            {currentUserType !== "editor" && (
-              <span className="inline-block mt-1 rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                View only
-              </span>
-            )}
-          </div>
-        </div>
+    <div className="flex h-full min-h-0 flex-col bg-[#0a0a0a]">
+      <div className="flex items-center justify-between px-5 pt-6 pb-4 border-b border-white/15 shrink-0">
+        <h3 className="text-sm font-bold text-white">Document outline</h3>
+        <button
+          onClick={onClose}
+          className="p-1 rounded hover:bg-white/10 transition-colors"
+        >
+          <X className="size-4 text-white/70" />
+        </button>
       </div>
 
-      <div className="h-px bg-border/50 mx-4 mb-4" />
-
-      {/* Document Outline */}
-      {outlineVisible && (
-        <div className="flex-1 px-3">
-          <div className="flex items-center justify-between px-2 mb-3">
-            <h3 className="text-[11px] font-semibold text-muted-foreground">
-              Outline
-            </h3>
+      {headings.length === 0 ? (
+        <p className="px-6 py-6 text-xs text-white/60 text-center leading-relaxed">
+          Add headings to your document to see an outline here.
+        </p>
+      ) : (
+        <nav
+          ref={navRef}
+          className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 py-4 flex flex-col gap-1.5"
+        >
+          {headings.map((h) => (
             <button
-              onClick={() => setOutlineVisible(false)}
-              className="p-0.5 rounded hover:bg-muted transition-colors"
+              key={h.key}
+              data-heading-key={h.key}
+              data-heading-text={h.text}
+              onClick={() => onScrollToHeading(h.key)}
+              title={h.text}
+              className={cn(
+                "w-full min-w-0 shrink-0 block overflow-hidden whitespace-nowrap text-left py-2 border-l-2 text-sm leading-snug font-semibold transition-colors rounded-r",
+                h.tag === "h1" && "pl-3 pr-3 mt-2 first:mt-0",
+                h.tag === "h2" && "pl-6 pr-3 font-medium",
+                (h.tag === "h3" ||
+                  h.tag === "h4" ||
+                  h.tag === "h5" ||
+                  h.tag === "h6") &&
+                  "pl-9 pr-3 text-[13px] font-medium",
+                activeHeadingKey === h.key
+                  ? "border-white bg-white/10 text-white"
+                  : "border-transparent text-white hover:bg-white/5"
+              )}
             >
-              <X className="size-3 text-muted-foreground" />
+              {truncated.get(h.key) ?? h.text}
             </button>
-          </div>
-
-          {headings.length === 0 ? (
-            <p className="px-2 py-6 text-xs text-muted-foreground text-center leading-relaxed">
-              Add headings to your document to see an outline here.
-            </p>
-          ) : (
-            <nav className="flex flex-col gap-0.5">
-              {headings.map((h) => (
-                <button
-                  key={h.key}
-                  onClick={() => onScrollToHeading(h.key)}
-                  className={cn(
-                    "w-full text-left py-1.5 rounded-md text-[13px] leading-snug truncate transition-colors hover:bg-muted",
-                    h.tag === "h1" && "px-2 font-medium",
-                    h.tag === "h2" && "pl-5 pr-2",
-                    (h.tag === "h3" ||
-                      h.tag === "h4" ||
-                      h.tag === "h5" ||
-                      h.tag === "h6") &&
-                      "pl-8 pr-2 text-[12px]",
-                    activeHeadingKey === h.key
-                      ? "text-primary bg-primary/5 border-l-2 border-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {h.text}
-                </button>
-              ))}
-            </nav>
-          )}
-        </div>
+          ))}
+        </nav>
       )}
+    </div>
+  );
+}
 
-      {!outlineVisible && (
-        <div className="px-5">
-          <button
-            onClick={() => setOutlineVisible(true)}
-            className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Show outline
-          </button>
-        </div>
-      )}
-    </>
+/**
+ * Desktop outline panel. When `visible` is false it renders nothing but a
+ * small floating round toggle (Google Docs-style) — not a collapsed rail —
+ * so closing it actually gives the editor the full width back instead of
+ * just swapping the panel's content for a thin "Show outline" link.
+ */
+export default function DocumentSidebar({
+  visible,
+  onOpen,
+  ...contentProps
+}: SidebarContentProps & { visible: boolean; onOpen: () => void }) {
+  if (!visible) {
+    return (
+      <button
+        onClick={onOpen}
+        aria-label="Show document outline"
+        className="fixed left-4 top-32 z-10 hidden lg:flex items-center justify-center size-9 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+      >
+        <PanelLeft className="size-4 text-foreground" />
+      </button>
+    );
+  }
+
+  return (
+    <aside className="fixed left-0 top-28 h-[calc(100vh-112px)] w-72 bg-[#0a0a0a] hidden lg:flex flex-col">
+      <DocumentSidebarContent {...contentProps} />
+    </aside>
   );
 }

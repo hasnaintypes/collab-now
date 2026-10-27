@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $getRoot } from "lexical";
 import { $convertFromMarkdownString } from "@lexical/markdown";
+import { RefreshCw } from "lucide-react";
 
 import { getGeneratedNotesForDocument } from "@/features/ingestion/actions/ingestion.actions";
 import { NOTES_TRANSFORMERS, isEditorEmpty } from "./notes-transformers";
@@ -32,37 +33,82 @@ import { NOTES_TRANSFORMERS, isEditorEmpty } from "./notes-transformers";
  * back down to empty and reloading, which would re-seed from the original
  * notes. Accepted for now rather than adding a `source_content` column to
  * track "already seeded" explicitly; revisit if that turns out to matter.
+ *
+ * Failure handling: `getGeneratedNotesForDocument` already retries a
+ * transient DB failure server-side, but if it still comes back
+ * unsuccessful (or the call itself rejects — a dropped connection mid
+ * request), this used to just give up silently, leaving the document
+ * permanently blank with no indication anything went wrong. Now it shows
+ * a dismissible banner with a manual retry instead.
  */
 
 export default function SeedNotesPlugin({ roomId }: { roomId: string }) {
   const [editor] = useLexicalComposerContext();
   const attempted = useRef(false);
+  const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
-  useEffect(() => {
-    // Guards against re-running on unrelated re-renders within the same
-    // mount — this is a one-shot check per document view, not a subscription.
-    if (attempted.current) return;
-    attempted.current = true;
-
+  const attemptSeed = useCallback(() => {
     if (!isEditorEmpty(editor)) return;
 
     let cancelled = false;
 
-    getGeneratedNotesForDocument({ roomId }).then((result) => {
-      if (cancelled || !result.success || !result.data) return;
+    getGeneratedNotesForDocument({ roomId })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.success || !result.data) {
+          setFailed(true);
+          return;
+        }
 
-      editor.update(() => {
-        // Clear the default empty paragraph before importing — otherwise
-        // the notes get inserted after a leading blank line.
-        $getRoot().clear();
-        $convertFromMarkdownString(result.data!.notes, NOTES_TRANSFORMERS);
+        editor.update(() => {
+          // Clear the default empty paragraph before importing —
+          // otherwise the notes get inserted after a leading blank line.
+          $getRoot().clear();
+          $convertFromMarkdownString(result.data!.notes, NOTES_TRANSFORMERS);
+        });
+        setFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setRetrying(false);
       });
-    });
 
     return () => {
       cancelled = true;
     };
   }, [editor, roomId]);
 
-  return null;
+  useEffect(() => {
+    // Guards against re-running on unrelated re-renders within the same
+    // mount — this is a one-shot check per document view, not a subscription.
+    if (attempted.current) return;
+    attempted.current = true;
+    return attemptSeed();
+  }, [attemptSeed]);
+
+  if (!failed) return null;
+
+  return (
+    <div
+      role="alert"
+      className="fixed bottom-16 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-sm border border-destructive/30 bg-background px-3.5 py-2 text-sm shadow-md"
+    >
+      <span>Couldn&apos;t load this document&apos;s generated notes.</span>
+      <button
+        type="button"
+        onClick={() => {
+          setRetrying(true);
+          attemptSeed();
+        }}
+        disabled={retrying}
+        className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline disabled:opacity-50"
+      >
+        <RefreshCw className={`size-3.5 ${retrying ? "animate-spin" : ""}`} />
+        Retry
+      </button>
+    </div>
+  );
 }
