@@ -1,5 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import { Download, FileText, FileDown, MessageSquare, Printer, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import ActiveCollaborators from "@/features/documents/components/active-collaborators";
+import ShareDialog from "@/features/documents/components/share-dialog";
 import Theme from "./plugins/theme";
 import ToolbarPlugin from "./plugins/toolbar-plugin";
 import HeadingOutlinePlugin, {
@@ -97,6 +102,8 @@ function RightPanelTabs({
 
 export function Editor({
   roomId,
+  roomMetadata,
+  users,
   currentUserType,
   onHeadingsChange,
   onWordCountChange,
@@ -111,6 +118,11 @@ export function Editor({
   onRightPanelTabChange,
 }: {
   roomId: string;
+  /** Needed here (rather than just in the navbar) now that Share/Export/
+      Collaborators live in this second header row — `creatorId` for
+      `ShareDialog`'s permission check. */
+  roomMetadata: RoomMetadata;
+  users: User[];
   currentUserType: UserType;
   onHeadingsChange: (headings: HeadingEntry[]) => void;
   onWordCountChange?: (wordCount: number) => void;
@@ -128,6 +140,13 @@ export function Editor({
 }) {
   const status = useIsEditorReady();
   const { threads } = useThreads();
+  // Desktop Discussion/Chat panel visibility — same collapse-to-floating-
+  // toggle pattern as the left outline panel (document-sidebar.tsx):
+  // closing it removes the panel's width reservation entirely instead of
+  // leaving a gutter. Local to this component (unlike the outline panel's
+  // `sidebarVisible`, which had to be lifted to `collaborative-room.tsx`)
+  // since both the panel and the canvas offset it affects live here.
+  const [rightPanelVisible, setRightPanelVisible] = useState(true);
 
   const initialConfig = liveblocksConfig({
     namespace: "Editor",
@@ -154,19 +173,90 @@ export function Editor({
       {status && <SeedNotesPlugin roomId={roomId} />}
       {status && <SeedTemplatePlugin templateId={templateId} />}
 
-      <div className="flex flex-1 w-full">
-        {/* Editor Content Canvas */}
-        <div className="flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar xl:mr-80">
-          {/* Floating Minimalist Toolbar */}
-          <div className="sticky top-4 z-10 mb-12">
-            <ToolbarPlugin />
+      {/* Persistent second header row (Google Docs-style): the formatting
+          toolbar on the left, and Collaborators/Export/Share on the right
+          — moved down from `document-navbar.tsx`, which now only holds
+          the logo/title/account menu. Rendered unconditionally (not
+          gated on `status`/`currentUserType`) since Export/Share/
+          Collaborators are meaningful for viewers too; only the
+          formatting commands themselves are editor-only. The toolbar
+          still has to live inside this `LexicalComposer` (it calls
+          `useLexicalComposerContext()`), so it's rendered here and
+          positioned via `fixed` rather than lifted into the navbar
+          component itself, which sits outside this tree. */}
+      <div className="fixed top-16 inset-x-0 z-40 h-12 flex items-center justify-between gap-2 px-4 md:px-8 bg-background border-b border-border/50">
+        <div className="flex items-center overflow-x-auto">
+          {status && currentUserType === "editor" && <ToolbarPlugin />}
+        </div>
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
+          <div className="mr-1 md:mr-2 hidden sm:block">
+            <ActiveCollaborators />
           </div>
 
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                aria-label="Export"
+                className="p-2 rounded hover:bg-muted transition-colors"
+              >
+                <Download className="size-[18px] text-foreground" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1">
+              <button
+                onClick={() => exportRef?.current?.exportMarkdown()}
+                className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-sm hover:bg-muted transition-colors"
+              >
+                <FileDown className="size-4 text-muted-foreground" />
+                Markdown
+              </button>
+              <button
+                onClick={() => exportRef?.current?.exportPlainText()}
+                className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-sm hover:bg-muted transition-colors"
+              >
+                <FileText className="size-4 text-muted-foreground" />
+                Plain Text
+              </button>
+              <button
+                onClick={() => exportRef?.current?.exportPdf()}
+                className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2 text-sm hover:bg-muted transition-colors"
+              >
+                <Printer className="size-4 text-muted-foreground" />
+                Print / PDF
+              </button>
+            </PopoverContent>
+          </Popover>
+
+          <ShareDialog
+            roomId={roomId}
+            collaborators={users}
+            creatorId={roomMetadata.creatorId}
+            currentUserType={currentUserType}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-1 w-full">
+        {/* Editor Content Canvas — a grey canvas behind an A4-proportioned
+            "page" (Google Docs-style). A previous version painted repeating
+            page-break bands onto the page via `background-image` to fake
+            stacked sheets, but since this is a single continuous
+            Lexical/Yjs tree with no real per-page layout/reflow, those
+            bands had no relationship to where text actually fell and ended
+            up slicing across the middle of random lines. Dropped that —
+            real multi-page pagination would need actual height-aware
+            content splitting, which is a separate, much bigger feature. */}
+        <div
+          className={cn(
+            "flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar bg-muted/40",
+            rightPanelVisible && "xl:mr-80"
+          )}
+        >
           {/* Writing Area (The "Page") */}
           {!status ? (
             <Loader className="min-h-[400px]" />
           ) : (
-            <article className="max-w-4xl w-full bg-card p-16 shadow-[0_20px_50px_rgba(0,0,0,0.02)] min-h-[1000px] border border-border/10">
+            <article className="w-[210mm] max-w-full p-16 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.08)] min-h-[297mm] border border-border/10">
               <div className="relative min-h-[800px]">
                 <RichTextPlugin
                   contentEditable={
@@ -186,26 +276,46 @@ export function Editor({
 
         {/* Discussion / Chat Panel */}
         <LiveblocksPlugin>
-          {/* Desktop */}
-          <aside className="fixed right-0 top-16 h-[calc(100vh-64px)] w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
-            <div className="flex items-center px-6 pt-10 pb-6">
-              <RightPanelTabs
-                hasChatSource={hasChatSource}
-                activeTab={rightPanelTab}
-                onTabChange={onRightPanelTabChange}
-              />
-            </div>
-            <div className="px-4 pb-12">
-              {hasChatSource && rightPanelTab === "chat" ? (
-                <ChatPanel roomId={roomId} />
-              ) : (
-                <Comments />
-              )}
-            </div>
-          </aside>
+          {/* Desktop — collapses to a floating round toggle when closed,
+              same pattern as the outline panel, rather than a rail. */}
+          {rightPanelVisible ? (
+            <aside className="fixed right-0 top-28 h-[calc(100vh-112px)] w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
+              <div className="flex items-center justify-between px-6 pt-10 pb-6">
+                <button
+                  onClick={() => setRightPanelVisible(false)}
+                  className="p-1 rounded hover:bg-muted transition-colors"
+                >
+                  <X className="size-4 text-muted-foreground" />
+                </button>
+                <RightPanelTabs
+                  hasChatSource={hasChatSource}
+                  activeTab={rightPanelTab}
+                  onTabChange={onRightPanelTabChange}
+                />
+              </div>
+              <div className="px-4 pb-12">
+                {hasChatSource && rightPanelTab === "chat" ? (
+                  <ChatPanel roomId={roomId} />
+                ) : (
+                  <Comments />
+                )}
+              </div>
+            </aside>
+          ) : (
+            <button
+              onClick={() => setRightPanelVisible(true)}
+              aria-label="Show discussion panel"
+              className="fixed right-4 top-32 z-10 hidden xl:flex items-center justify-center size-9 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+            >
+              <MessageSquare className="size-4 text-foreground" />
+            </button>
+          )}
           {/* Mobile */}
           <Sheet open={discussionOpen} onOpenChange={onDiscussionOpenChange}>
-            <SheetContent side="right" className="w-80 p-0 overflow-y-auto no-scrollbar">
+            <SheetContent
+              side="right"
+              className="w-80 p-0 bg-background overflow-y-auto no-scrollbar"
+            >
               <SheetTitle className="sr-only">Discussion</SheetTitle>
               <div className="flex items-center px-6 pt-10 pb-6">
                 <RightPanelTabs

@@ -68,6 +68,14 @@ export const getIngestionJobStatus = async ({
   return getIngestionJobStatusForUser({ userId: session.user.id, jobId });
 };
 
+/** Max attempts for the transient-DB-error retry below. */
+const GET_NOTES_MAX_ATTEMPTS = 3;
+const GET_NOTES_BASE_DELAY_MS = 300;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Read side of P1-8's client-side content-seeding: the editor
  * (`features/editor/components/plugins/seed-notes-plugin.tsx`) calls this
@@ -78,6 +86,15 @@ export const getIngestionJobStatus = async ({
  * ingestion-derived (the inner join naturally excludes those) or whose
  * notes haven't finished generating yet, rather than an error — both are
  * expected, ordinary states, not failures.
+ *
+ * Retries the query itself a couple of times on failure: this call sits on
+ * the one-shot seeding path (the client only attempts it once per page
+ * view, with no polling/subscription behind it), so a single transient
+ * connection failure here — observed in practice against Neon's HTTP
+ * driver — would otherwise leave a document permanently blank until the
+ * user manually reloads. Anything that reaches this catch is an
+ * infra-level failure (the query itself has no business-logic failure
+ * mode besides "no matching row," which is handled above, not thrown).
  */
 export const getGeneratedNotesForDocument = async ({
   roomId,
@@ -90,16 +107,26 @@ export const getGeneratedNotesForDocument = async ({
   }
 
   return safeAction(async () => {
-    const [row] = await db
-      .select({
-        workspaceId: document.workspaceId,
-        generatedNotes: sourceContent.generatedNotes,
-        noteStyle: sourceContent.noteStyle,
-      })
-      .from(document)
-      .innerJoin(sourceContent, eq(sourceContent.documentId, document.id))
-      .where(eq(document.roomId, roomId))
-      .limit(1);
+    let row: { workspaceId: string; generatedNotes: string | null; noteStyle: string } | undefined;
+
+    for (let attempt = 1; ; attempt++) {
+      try {
+        [row] = await db
+          .select({
+            workspaceId: document.workspaceId,
+            generatedNotes: sourceContent.generatedNotes,
+            noteStyle: sourceContent.noteStyle,
+          })
+          .from(document)
+          .innerJoin(sourceContent, eq(sourceContent.documentId, document.id))
+          .where(eq(document.roomId, roomId))
+          .limit(1);
+        break;
+      } catch (error) {
+        if (attempt >= GET_NOTES_MAX_ATTEMPTS) throw error;
+        await delay(GET_NOTES_BASE_DELAY_MS * 2 ** (attempt - 1));
+      }
+    }
 
     if (!row || !row.generatedNotes) {
       return null;

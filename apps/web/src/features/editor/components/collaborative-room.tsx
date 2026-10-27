@@ -4,6 +4,7 @@ import { RoomProvider, ClientSideSuspense } from "@liveblocks/react/suspense";
 import { useRef, useState, useCallback } from "react";
 import { PanelLeft, MessageSquare, MessageCircleQuestion } from "lucide-react";
 import Loader from "@/components/shared/loader";
+import { cn } from "@/lib/utils";
 import { Editor } from "./editor";
 import type { HeadingEntry } from "./plugins/heading-outline-plugin";
 import type { ExportFunctions } from "./plugins/export-plugin";
@@ -24,6 +25,11 @@ export default function CollaborativeRoom({
   const [headings, setHeadings] = useState<HeadingEntry[]>([]);
   const [wordCount, setWordCount] = useState(0);
   const [activeHeadingKey, setActiveHeadingKey] = useState<string | null>(null);
+  // Desktop outline panel visibility — distinct from `sidebarOpen` below,
+  // which is the mobile `Sheet`'s own open state. Closing the desktop panel
+  // removes it entirely (grey canvas, recentered editor) rather than
+  // collapsing it to a thin rail.
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [discussionOpen, setDiscussionOpen] = useState(false);
   // P2-5: which tab the Discussion/Chat panel shows — owned here (not
@@ -51,11 +57,7 @@ export default function CollaborativeRoom({
     setSidebarOpen(false);
   };
 
-  const sidebarProps = {
-    roomId,
-    title: roomMetadata.title,
-    currentUserType,
-    currentUserName: currentUser.name,
+  const outlineProps = {
     headings,
     activeHeadingKey,
     onScrollToHeading: handleScrollToHeading,
@@ -68,28 +70,48 @@ export default function CollaborativeRoom({
           <DocumentNavbar
             roomId={roomId}
             roomMetadata={roomMetadata}
-            users={users}
             currentUserType={currentUserType}
             currentUser={currentUser}
-            exportRef={exportRef}
           />
 
-          {/* Desktop sidebar */}
-          <DocumentSidebar {...sidebarProps} />
+          {/* Desktop sidebar — collapses to a floating toggle, not a rail,
+              when closed (see document-sidebar.tsx). */}
+          <DocumentSidebar
+            {...outlineProps}
+            visible={sidebarVisible}
+            onOpen={() => setSidebarVisible(true)}
+            onClose={() => setSidebarVisible(false)}
+          />
 
           {/* Mobile sidebar sheet */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetContent side="left" className="w-72 p-0 pt-6">
+            <SheetContent side="left" className="w-72 p-0 bg-[#0a0a0a]">
               <SheetTitle className="sr-only">Document Outline</SheetTitle>
-              <DocumentSidebarContent {...sidebarProps} />
+              <DocumentSidebarContent
+                {...outlineProps}
+                onClose={() => setSidebarOpen(false)}
+              />
             </SheetContent>
           </Sheet>
 
-          <main className="lg:ml-64 pt-16 pb-12 min-h-screen bg-background flex relative">
+          {/* pt-28/top-* offsets below account for the two-row header
+              (DocumentNavbar's h-16 + editor.tsx's fixed h-12 toolbar row
+              = 112px / top-28), reserved at this fixed height regardless
+              of whether the toolbar row is actually rendered (it's hidden
+              for viewers) so the layout doesn't shift between roles.
+              The left margin only applies while the desktop outline panel
+              is open — closing it should actually give the editor the
+              width back and recenter it, not just leave a gutter. */}
+          <main
+            className={cn(
+              "pt-28 pb-12 min-h-screen bg-background flex relative",
+              sidebarVisible ? "lg:ml-72" : "lg:ml-0"
+            )}
+          >
             {/* Mobile toggle buttons */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="fixed left-4 top-20 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+              className="fixed left-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors lg:hidden"
             >
               <PanelLeft className="size-5" />
             </button>
@@ -98,7 +120,7 @@ export default function CollaborativeRoom({
                 setRightPanelTab("discussion");
                 setDiscussionOpen(true);
               }}
-              className="fixed right-4 top-20 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
+              className="fixed right-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
             >
               <MessageSquare className="size-5" />
             </button>
@@ -108,7 +130,7 @@ export default function CollaborativeRoom({
                   setRightPanelTab("chat");
                   setDiscussionOpen(true);
                 }}
-                className="fixed right-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
+                className="fixed right-4 top-44 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
               >
                 <MessageCircleQuestion className="size-5" />
               </button>
@@ -116,6 +138,8 @@ export default function CollaborativeRoom({
 
             <Editor
               roomId={roomId}
+              roomMetadata={roomMetadata}
+              users={users}
               currentUserType={currentUserType}
               onHeadingsChange={handleHeadingsChange}
               onWordCountChange={handleWordCountChange}

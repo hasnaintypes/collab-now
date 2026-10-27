@@ -498,6 +498,52 @@ describe("getGeneratedNotesForDocument", () => {
       data: { notes: "# Notes\n- a", noteStyle: "cornell" },
     });
   });
+
+  it("retries a transient query failure and succeeds on the next attempt", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    const limitMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce([{ workspaceId: "ws-1", generatedNotes: "# Notes", noteStyle: "bullet-outline" }]);
+    const builder = {
+      from: vi.fn(() => builder),
+      innerJoin: vi.fn(() => builder),
+      where: vi.fn(() => builder),
+      limit: limitMock,
+    };
+    dbMock.select
+      .mockReturnValueOnce(builder) // attempt 1: rejects
+      .mockReturnValueOnce(builder) // attempt 2: succeeds (same builder, fresh `db.select()` call)
+      .mockReturnValueOnce(selectChain([{ id: "member-1" }])); // workspace membership check
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({
+      success: true,
+      data: { notes: "# Notes", noteStyle: "bullet-outline" },
+    });
+    expect(limitMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after repeated transient query failures", async () => {
+    getSessionMock.mockResolvedValueOnce({ user: { id: "user-1" } });
+    const limitMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const builder = {
+      from: vi.fn(() => builder),
+      innerJoin: vi.fn(() => builder),
+      where: vi.fn(() => builder),
+      limit: limitMock,
+    };
+    dbMock.select.mockReturnValue(builder);
+
+    const result = await getGeneratedNotesForDocument({ roomId: "room-1" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Failed to load this document's generated notes.",
+    });
+    expect(limitMock).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe("regenerateNotes", () => {

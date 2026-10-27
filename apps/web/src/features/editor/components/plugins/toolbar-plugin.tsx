@@ -145,7 +145,7 @@ export default function ToolbarPlugin() {
   const iconSize = "size-[20px]";
 
   return (
-    <div className="flex items-center gap-1 bg-background/90 backdrop-blur border border-border/30 p-1 shadow-sm">
+    <div className="flex items-center gap-0.5">
       {/* Undo / Redo */}
       <ToolbarButton onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} disabled={!canUndo} ariaLabel="Undo">
         <Undo2 className={iconSize} />
