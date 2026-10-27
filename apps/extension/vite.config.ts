@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 
 // Minimal MV3 build: popup + options pages, plus a background service
@@ -13,7 +14,7 @@ import { resolve } from "path";
 // script into every page (the stub's `<all_urls>` content script) to get a
 // URL the extension already has for free is unnecessary permission surface.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     outDir: "dist",
     rollupOptions: {

@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { getToken, setToken, clearToken } from "../lib/token-storage";
 import { verifyToken, type ConnectedAccount } from "../lib/auth-client";
+import { Logo } from "../components/logo";
+import { Button } from "../components/button";
 
 export default function Options() {
   const [tokenInput, setTokenInput] = useState("");
@@ -50,55 +52,56 @@ export default function Options() {
   };
 
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui, sans-serif", maxWidth: 420 }}>
-      <h1 style={{ fontSize: 16, fontWeight: 700 }}>CollabNow — Settings</h1>
+    <div className="flex min-h-screen justify-center bg-background px-6 py-12">
+      <div className="w-full max-w-sm">
+        <Logo />
+        <h1 className="mt-6 text-lg font-semibold text-foreground">
+          Settings
+        </h1>
 
-      {account ? (
-        <>
-          <p style={{ fontSize: 13, color: "#1a7f37" }}>
-            Connected as <strong>{account.email}</strong>
-          </p>
-          <button
-            onClick={handleClear}
-            style={{ marginTop: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}
-          >
-            Disconnect
-          </button>
-        </>
-      ) : (
-        <>
-          <p style={{ fontSize: 13, color: "#666" }}>
-            Paste a personal access token generated from your CollabNow
-            account to connect this extension. Tokens authenticate without
-            sharing your browser&apos;s sign-in session.
-          </p>
-          <input
-            type="password"
-            value={tokenInput}
-            onChange={(event) => setTokenInput(event.target.value)}
-            placeholder="Paste your personal access token"
-            style={{ width: "100%", padding: "6px 8px", fontSize: 13, boxSizing: "border-box" }}
-          />
-          <button
-            onClick={handleSave}
-            disabled={status === "checking" || !tokenInput.trim()}
-            style={{
-              marginTop: 8,
-              padding: "6px 12px",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: status === "checking" ? "not-allowed" : "pointer",
-            }}
-          >
-            {status === "checking" ? "Checking…" : "Save"}
-          </button>
-          {status === "error" && (
-            <p style={{ fontSize: 12, color: "#b42318", marginTop: 8 }}>
-              That token couldn&apos;t be verified. Check it and try again.
+        {account ? (
+          <div className="mt-4 rounded-md border border-border bg-card p-4">
+            <p className="flex items-center gap-2 text-sm text-foreground">
+              <span className="size-1.5 rounded-full bg-success" />
+              Connected as <span className="font-medium">{account.email}</span>
             </p>
-          )}
-        </>
-      )}
+            <Button
+              variant="outline"
+              className="mt-3 w-auto"
+              onClick={() => void handleClear()}
+            >
+              Disconnect
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-md border border-border bg-card p-4">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Paste a personal access token generated from your CollabNow
+              account to connect this extension. Tokens authenticate without
+              sharing your browser&apos;s sign-in session.
+            </p>
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={(event) => setTokenInput(event.target.value)}
+              placeholder="Paste your personal access token"
+              className="mt-3 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              className="mt-3"
+              onClick={() => void handleSave()}
+              disabled={status === "checking" || !tokenInput.trim()}
+            >
+              {status === "checking" ? "Checking…" : "Save"}
+            </Button>
+            {status === "error" && (
+              <p className="mt-2 text-xs text-destructive">
+                That token couldn&apos;t be verified. Check it and try again.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
