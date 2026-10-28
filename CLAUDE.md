@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CollabNow is a real-time collaborative document editor (Notion/Google-Docs style). This repo is a **Turborepo monorepo** using pnpm workspaces, with a feature-based ("screaming architecture") structure inside the web app. Env files only live in `apps/web/.env` — Next.js does not load env files from the repo root.
 
-Two planning docs in `docs/` drive current work: `docs/PRD.md` (product requirements for the in-progress AI notes-from-video/article + Paddle billing feature) and `docs/ROADMAP.md` (phased issue-tracking source of truth — supersedes `docs/GAP.md`, which will be deleted once Phase 0 closes).
+Two planning docs in `docs/` drive current work: `docs/PRD.md` (product requirements for the AI notes-from-video/article + Paddle billing feature) and `docs/ROADMAP.md` (phased issue-tracking source of truth — superseded `docs/GAP.md`, deleted once Phase 0 closed).
 
 ## Commands
 
@@ -70,18 +70,18 @@ Server actions live under `features/<name>/actions/*.actions.ts` with a `"use se
 
 **Server action error handling (P0-7):** every exported action in `documents`, `workspace`, and `activity` returns `ActionResult<T>` from `@/lib/action-result` (`{success: true, data: T} | {success: false, error: string, retryAfterSeconds?: number}`) instead of throwing or inventing an ad hoc shape. Wrap the body in `safeAction(fn, fallbackMessage)`; throw `ActionError("user-facing message")` from inside `fn` for expected/business-rule failures (its message reaches the client as-is), and let anything else throw normally — `safeAction` logs it server-side and replaces it with `fallbackMessage` so internal details never leak to the UI. Guard clauses that run *before* the wrapped body (e.g. an auth/rate-limit check) can return `actionError(...)`/`actionSuccess(...)` directly. `unstable_rethrow` inside `safeAction` means `redirect()`/`notFound()` always keep propagating instead of being caught — call them *outside* `safeAction`, after checking `result.success` (see `deleteDocument`). Client components/pages consuming these actions must check `result.success` before touching `result.data`; page-level failures that have no graceful fallback (e.g. a missing workspace) can just `throw new Error(result.error)` to fall back to Next's default error handling, same as an uncaught error would have done before this convention existed. Two documented exceptions: `getUsers`/`getDocumentUsers` (`features/documents/actions/user.actions.ts`) feed Liveblocks' `resolveUsers`/`resolveMentionSuggestions` callbacks directly and must keep returning plain arrays; `checkCommentRateLimit` (`features/comments/actions/comment.actions.ts`) is a rate-limit gate, not a mutation, and keeps its own `{allowed, error?}` shape.
 
-### Document storage: two sources of truth (important)
+### Document storage: two sources of truth, scoped down
 
-Documents are **dual-homed** between Liveblocks and Postgres, and this is a known architectural gap (not a deliberate design):
+Documents are still **dual-homed** between Liveblocks and Postgres, but the listing/filtering gap this section used to warn about is closed:
 
-- **Liveblocks** (`liveblocks.createRoom` / `getRooms` / `getRoom`) is the room itself — real-time content, presence, per-user room access (`usersAccesses`), and room `metadata` (creatorId, email, title).
+- **Liveblocks** (`liveblocks.createRoom` / `getRoom`) is the room itself — real-time content, presence, per-user room access (`usersAccesses`), and room `metadata` (creatorId, email, title). Rooms are looked up individually by `roomId`, never listed in bulk anymore.
 - **Postgres `document` table** (`packages/db/src/schema/app.ts`) stores the same document's title/creator/workspace plus `isArchived`, linked by `roomId`.
-- The dashboard's primary document list is still fetched from **Liveblocks** (`getDocuments()` → `liveblocks.getRooms()`), while star/archive filtering queries **Postgres** separately, then results are merged client-side. When touching document listing/filtering code, be aware both sources must stay in sync, and prefer being explicit about which one you're reading/writing rather than assuming.
+- The dashboard's document list (`getDocumentsForUser`, `features/documents/actions/room.actions.ts`) is fetched entirely from **Postgres** — pagination, search, and star/archive filtering are all one server-side query against `document`/`documentStar`/`documentCollaborator`. Liveblocks is only consulted per-document (`getRoom`) once a specific room is opened, for its real-time content/presence/access — not for listing. The dual-homing that remains is the title/creator being duplicated across both stores, not a listing-correctness gap.
 - `liveblocks.ts` in `src/lib` wraps the Liveblocks Node client in a lazy-init `Proxy` so `LIVEBLOCKS_SECRET_KEY` isn't read until first use.
 
 ### Auth
 
-Better Auth (`apps/web/src/features/auth/lib/server.ts`), email/password only, `drizzleAdapter` against the same Postgres DB, `requireEmailVerification: true`. Verification emails send via `@collabnow/email`. Password reset and welcome-email templates exist in `@collabnow/email` but are **not currently wired** to Better Auth plugins (tracked as P0-1/P0-2) — don't assume they fire.
+Better Auth (`apps/web/src/features/auth/lib/server.ts`), email/password only, `drizzleAdapter` against the same Postgres DB, `requireEmailVerification: true`. Verification emails send via `@collabnow/email`. Password reset (`sendResetPassword`) and the welcome email are both wired in `server.ts`.
 
 ### Editor
 
@@ -118,5 +118,5 @@ All of `features/billing/` (P3-1 through P3-5). `subscription`/`usage_counter` (
 ## Keeping docs in sync
 
 - **`README.md`** should stay accurate for a new contributor: env vars, setup steps, feature list, and scripts. Update it when any of those change (new env var, new top-level script, new major feature shipped).
-- **`CLAUDE.md`** (this file) should stay accurate about architecture reality, not aspiration — update it when a roadmap item lands (e.g. once P0-3 ships, remove the "dual source of truth" caveat; once P0-1/P0-2 ship, remove the "not currently wired" note).
-- **`docs/ROADMAP.md`** is the issue-tracking source of truth. Once every Phase 0 issue (#1–#17, `P0-1`–`P0-17`) is closed, delete `docs/GAP.md`.
+- **`CLAUDE.md`** (this file) should stay accurate about architecture reality, not aspiration — update it when a roadmap item lands.
+- **`docs/ROADMAP.md`** is the issue-tracking source of truth.
