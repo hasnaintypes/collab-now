@@ -1,20 +1,25 @@
-import { FileEdit, FolderOpen, ShieldCheck, Share2, MessageSquarePlus, Users } from 'lucide-react'
+import { FileEdit, Sparkles, MessageCircleQuestion, Puzzle, Share2, Users } from 'lucide-react'
 
 const features = [
     {
         icon: FileEdit,
         title: 'Real-time Editing',
-        description: 'Multiple users, one document. Experience zero-latency synchronization across continents.',
+        description: 'Multiple users, one document. Zero-latency synchronization, same as the rest of this editor.',
     },
     {
-        icon: FolderOpen,
-        title: 'Document Management',
-        description: 'Organized workspace for your files with nested folders and smart tagging.',
+        icon: Sparkles,
+        title: 'AI Notes from Any Link',
+        description: 'Paste a YouTube video or article URL and get structured notes generated straight into a new document, with five styles to choose from, including Cornell and mind-map.',
     },
     {
-        icon: ShieldCheck,
-        title: 'Secure Auth',
-        description: 'Enterprise-grade security with SSO, 2FA, and audit logs for your data.',
+        icon: MessageCircleQuestion,
+        title: 'Ask About This Document',
+        description: "A chat panel scoped to one document: it answers only from that document's own source material.",
+    },
+    {
+        icon: Puzzle,
+        title: 'Browser Extension',
+        description: 'Generate notes from any tab without leaving the page you\'re already on.',
     },
     {
         icon: Share2,
@@ -22,14 +27,9 @@ const features = [
         description: 'Control who sees what with ease. Granular roles from viewer to admin.',
     },
     {
-        icon: MessageSquarePlus,
-        title: 'Inline Threaded Comments',
-        description: 'Deep, contextual discussions directly within the text flow.',
-    },
-    {
         icon: Users,
-        title: 'Live Presence Indicators',
-        description: "See who's editing and where. Visual avatar stack for immediate context.",
+        title: 'Live Presence & Comments',
+        description: "See who's editing and where, and leave threaded comments directly in the text.",
     },
 ]
 

@@ -2,32 +2,23 @@ import { LogoIcon } from '@/components/logo'
 import { ThemeSwitch } from '@/components/theme-switch'
 import Link from 'next/link'
 
+// Only real destinations — no Terms/Privacy/About/Blog/Careers/Docs/
+// Community pages exist yet, and a footer full of dead href="#" links
+// is worse than a shorter, honest one.
 const footerLinks = {
     Product: [
         { name: 'Features', href: '#features' },
-        { name: 'Integrations', href: '#' },
-        { name: 'Pricing', href: '#' },
-    ],
-    Company: [
-        { name: 'About', href: '#' },
-        { name: 'Blog', href: '#' },
-        { name: 'Careers', href: '#' },
+        { name: 'Pricing', href: '#pricing' },
     ],
     Resources: [
-        { name: 'Documentation', href: '#' },
-        { name: 'Help Center', href: '#' },
-        { name: 'Community', href: '#' },
-    ],
-    Legal: [
-        { name: 'Terms', href: '#' },
-        { name: 'Privacy', href: '#' },
+        { name: 'Help Center', href: '/help' },
     ],
 }
 
 export default function FooterSection() {
     return (
         <footer className="w-full bg-muted/50 py-24">
-            <div className="mx-auto grid max-w-7xl grid-cols-2 gap-12 px-8 md:grid-cols-4 lg:grid-cols-6">
+            <div className="mx-auto grid max-w-7xl grid-cols-2 gap-12 px-8 md:grid-cols-4">
                 <div className="col-span-2">
                     <Link href="/" className="mb-6 inline-flex items-center gap-2">
                         <LogoIcon size={24} />
