@@ -19,7 +19,6 @@ import MobileSidebar from "@/features/workspace/components/mobile-sidebar";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
 import Sidebar from "@/features/workspace/components/sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { DocumentFilter } from "@/features/documents/types";
 
 const VALID_FILTERS: DocumentFilter[] = ["recent", "starred", "shared", "archived", "all"];
@@ -75,7 +74,6 @@ export default async function DashboardPage({
       <DashboardHeader
         mobileSidebar={<MobileSidebar {...sidebarProps} />}
       >
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}
