@@ -169,7 +169,7 @@ export default function DocumentSidebar({
       <button
         onClick={onOpen}
         aria-label="Show document outline"
-        className="fixed left-4 top-32 z-10 hidden lg:flex items-center justify-center size-9 rounded-full bg-muted hover:bg-muted/80 transition-colors"
+        className="fixed left-4 top-32 z-10 hidden xl:flex items-center justify-center size-9 rounded-full bg-muted hover:bg-muted/80 transition-colors"
       >
         <PanelLeft className="size-4 text-foreground" />
       </button>
@@ -177,7 +177,7 @@ export default function DocumentSidebar({
   }
 
   return (
-    <aside className="fixed left-0 top-28 h-[calc(100vh-112px)] w-72 bg-[#0a0a0a] hidden lg:flex flex-col">
+    <aside className="fixed left-0 top-28 h-[calc(100vh-112px)] w-72 bg-[#0a0a0a] hidden xl:flex flex-col">
       <DocumentSidebarContent {...contentProps} />
     </aside>
   );

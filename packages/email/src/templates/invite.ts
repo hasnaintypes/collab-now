@@ -5,11 +5,17 @@ export function inviteEmailHtml({
   workspaceName,
   role,
   acceptUrl,
+  expiresInMinutes,
 }: {
   inviterName: string;
   workspaceName: string;
   role: string;
   acceptUrl: string;
+  /** Kept as a parameter (not hardcoded copy) specifically so this text
+   * can't silently drift out of sync with the actual expiry window the
+   * way the previous hardcoded "7 days" did after that value changed to
+   * 30 minutes in workspace.actions.ts's INVITE_EXPIRY_MS. */
+  expiresInMinutes: number;
 }) {
   return baseEmailHtml({
     body: `
@@ -22,7 +28,7 @@ export function inviteEmailHtml({
         Accept Invite
       </a>
       <p style="margin:24px 0 0;font-size:13px;color:#a1a1aa;line-height:1.5;">
-        This invite expires in 7 days. If you didn&rsquo;t expect this email, you can safely ignore it.
+        This invite expires in ${expiresInMinutes} minutes. If you didn&rsquo;t expect this email, you can safely ignore it.
       </p>
     `,
   });

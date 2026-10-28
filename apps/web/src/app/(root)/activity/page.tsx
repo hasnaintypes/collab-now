@@ -10,7 +10,6 @@ import {
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
-import { ThemeToggle } from "@/components/theme-toggle";
 import ActivityFeed from "@/features/activity/components/activity-feed";
 
 export default async function ActivityPage() {
@@ -32,7 +31,6 @@ export default async function ActivityPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

@@ -50,6 +50,12 @@ import type { GetActivityOptions, PaginatedActivity } from "../../activity/types
 
 const ACTIVITY_PAGE_SIZE = 20;
 
+// Short-lived by design: a stale pending invite that never gets revoked
+// (the inviter forgets, or leaves) shouldn't stay valid indefinitely.
+// 30 minutes is a deliberate tradeoff — the recipient needs to see and
+// click the email within that window, or they'll need a fresh invite.
+const INVITE_EXPIRY_MS = 30 * 60 * 1000;
+
 export const getOrCreateWorkspace = async (
   userId: string,
   userName: string
@@ -270,7 +276,7 @@ export const inviteMember = async ({
 
     // Create invite
     const token = nanoid();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
 
     const [invite] = await db
       .insert(workspaceInvite)
@@ -308,6 +314,7 @@ export const inviteMember = async ({
         workspaceName: ws.name,
         role,
         acceptUrl,
+        expiresInMinutes: INVITE_EXPIRY_MS / 60_000,
       }),
     });
 

@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { HeroHeader } from '@/features/marketing/components/header'
-import FooterSection from '@/features/marketing/components/footer'
 
 export default function NotFound() {
     return (
@@ -46,21 +45,12 @@ export default function NotFound() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
+                    <div className="flex items-center justify-center pt-4">
                         <Link
                             href="/"
                             className="w-full rounded-sm bg-primary px-10 py-4 text-center font-medium text-primary-foreground shadow-[0_10px_30px_rgba(0,0,0,0.1)] transition-all hover:opacity-90 sm:w-auto">
                             Return Home
                         </Link>
-                        <div className="flex items-center gap-6 text-sm uppercase tracking-widest text-muted-foreground">
-                            <Link href="#" className="border-b border-transparent transition-colors hover:border-primary hover:text-primary">
-                                Help Center
-                            </Link>
-                            <span className="size-1 rounded-full bg-border" />
-                            <Link href="#" className="border-b border-transparent transition-colors hover:border-primary hover:text-primary">
-                                Contact Support
-                            </Link>
-                        </div>
                     </div>
                 </div>
 
@@ -72,8 +62,6 @@ export default function NotFound() {
                     </div>
                 </div>
             </main>
-
-            <FooterSection />
         </div>
     )
 }

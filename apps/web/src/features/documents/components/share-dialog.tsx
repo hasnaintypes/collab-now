@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Share2 } from "lucide-react";
 import { useSelf } from "@liveblocks/react/suspense";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,8 +65,9 @@ export default function ShareDialog({
         <Button
           size="sm"
           disabled={currentUserType !== "editor"}
-          className="px-4 py-1.5 text-sm font-medium"
+          className="gap-1.5 px-3.5 py-1.5 text-sm font-medium"
         >
+          <Share2 className="size-3.5" />
           Share
         </Button>
       </DialogTrigger>
