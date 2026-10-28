@@ -25,7 +25,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
-import { updateTag, unstable_cache } from "next/cache";
+import { updateTag, revalidateTag, unstable_cache } from "next/cache";
 import { parseStringify } from "@/lib/utils";
 import { checkRateLimit, formatRetryAfter, RATE_LIMITS } from "@/lib/rate-limit";
 import {
@@ -392,8 +392,14 @@ export const acceptInvite = async (
       action: "joined",
     });
 
-    updateTag(workspaceMembersTag(invite.workspaceId));
-    updateTag(activityTag(invite.workspaceId));
+    // `updateTag` only works when called from inside a real Server Action
+    // invocation (a form submit/button click) — this action is also called
+    // directly from `AcceptInvitePage`'s render (a Server Component), which
+    // Next treats as "during render", so `revalidateTag` is used here
+    // instead (same fix as `process-ingestion-job.ts`'s `save-document`
+    // step, for the same reason).
+    revalidateTag(workspaceMembersTag(invite.workspaceId), "max");
+    revalidateTag(activityTag(invite.workspaceId), "max");
 
     return { outcome: "joined", workspaceId: invite.workspaceId };
   }, "Failed to accept invite. Please try again.");
