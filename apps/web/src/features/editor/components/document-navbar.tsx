@@ -6,6 +6,8 @@ import { Check, Pencil } from "lucide-react";
 import { LogoIcon } from "@/components/logo";
 import { Input } from "@/components/ui/input";
 import { updateDocument } from "@/features/documents/actions/room.actions";
+import ActiveCollaborators from "@/features/documents/components/active-collaborators";
+import ShareDialog from "@/features/documents/components/share-dialog";
 import UserButton from "@/components/shared/user-button";
 
 type SaveStatus = "idle" | "saving" | "saved";
@@ -109,7 +111,7 @@ function DocumentTitle({
           onClick={() => editable && setEditing(true)}
           className="group flex items-center gap-1.5 min-w-0 text-left"
         >
-          <p className="text-lg font-medium truncate max-w-48 sm:max-w-md">
+          <p className="text-lg font-medium truncate max-w-28 sm:max-w-48 md:max-w-md">
             {documentTitle}
           </p>
           {editable && (
@@ -146,11 +148,13 @@ function DocumentTitle({
 export default function DocumentNavbar({
   roomId,
   roomMetadata,
+  users,
   currentUserType,
   currentUser,
 }: {
   roomId: string;
   roomMetadata: RoomMetadata;
+  users: User[];
   currentUserType: UserType;
   currentUser: MinimalUser;
 }) {
@@ -171,7 +175,22 @@ export default function DocumentNavbar({
         />
       </div>
 
-      <div className="flex items-center gap-2 md:gap-4 shrink-0">
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        {/* Hidden until `xl` — this is the decorative "who's here" stack,
+            not essential chrome, so it's the first thing dropped on
+            tablet/mobile widths to keep the header from getting crowded.
+            Share stays visible at every width since it's an actual
+            action, not just a presence display. */}
+        <div className="hidden xl:block">
+          <ActiveCollaborators />
+        </div>
+        <ShareDialog
+          roomId={roomId}
+          collaborators={users}
+          creatorId={roomMetadata.creatorId}
+          currentUserType={currentUserType}
+        />
+        <div className="h-6 w-px bg-border/50 hidden sm:block shrink-0" />
         <UserButton
           name={currentUser.name}
           email={currentUser.email}
