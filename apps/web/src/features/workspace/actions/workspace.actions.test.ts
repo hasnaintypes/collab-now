@@ -55,6 +55,7 @@ vi.mock("next/headers", () => ({
 
 vi.mock("next/cache", () => ({
   updateTag: vi.fn(),
+  revalidateTag: vi.fn(),
   unstable_cache: (fn: unknown) => fn,
 }));
 
