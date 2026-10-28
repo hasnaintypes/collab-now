@@ -8,10 +8,10 @@ export default function HeroSection() {
                 <div className="relative z-10 mx-auto max-w-7xl px-8">
                     <div className="md:w-1/2">
                         <h1 className="mb-8 max-w-xl text-6xl font-bold tracking-tighter leading-[1.05] md:text-7xl">
-                            CollabNow: <span className="whitespace-nowrap">Real-time</span> collaboration for modern teams
+                            From any link to <span className="whitespace-nowrap">collaborative</span> notes, instantly
                         </h1>
                         <p className="text-muted-foreground mb-12 max-w-2xl text-xl leading-relaxed md:text-2xl">
-                            Edit documents together, share with granular permissions, and see your team in action with live presence indicators.
+                            Paste a YouTube video or article and get AI-generated notes in seconds, then edit, comment, and share them with your team in real time.
                         </p>
 
                         <div className="flex flex-col gap-4 sm:flex-row">
@@ -23,7 +23,7 @@ export default function HeroSection() {
                             <Link
                                 href="#features"
                                 className="bg-secondary text-secondary-foreground rounded-sm px-10 py-5 text-lg font-bold hover:bg-muted transition-all">
-                                Book a Demo
+                                See How It Works
                             </Link>
                         </div>
                     </div>

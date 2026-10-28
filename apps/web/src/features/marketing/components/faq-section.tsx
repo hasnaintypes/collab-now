@@ -7,17 +7,22 @@ const faqItems = [
     {
         id: 'item-1',
         question: "How secure is my team's data?",
-        answer: 'We use AES-256 encryption at rest and TLS 1.3 for data in transit. Our infrastructure is SOC2 Type II compliant and regularly audited by third-party security firms.',
+        answer: 'Every connection to your data runs over TLS, and access to a workspace and its documents is scoped per-member by role. Documents are never public by default: you control exactly who can view or edit each one.',
     },
     {
         id: 'item-2',
         question: 'Can we export our documents?',
-        answer: 'Yes, you can export your data in Markdown, PDF, or HTML formats at any time. We believe in total data portability.',
+        answer: 'Yes, export any document as Markdown, plain text, or PDF at any time. We believe in total data portability.',
     },
     {
         id: 'item-3',
-        question: 'Does CollabNow support offline editing?',
-        answer: 'Absolutely. Changes made while offline are stored locally and synchronized automatically the moment a connection is re-established.',
+        question: 'How does the AI notes feature work?',
+        answer: "Paste a YouTube video link or an article URL (from the dashboard or the browser extension) and CollabNow transcribes or extracts the source, then generates structured notes into a new document. Pick from five note styles (bullet outline, Cornell, mind-map, Q&A/flashcards, or executive summary), and switch styles later without re-fetching the source.",
+    },
+    {
+        id: 'item-4',
+        question: 'What is "Ask about this"?',
+        answer: "A chat panel scoped to a single document: ask it questions and it answers only from that document's own source material, nothing else. It's available on Pro and Team plans.",
     },
 ]
 
