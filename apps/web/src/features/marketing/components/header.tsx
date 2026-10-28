@@ -7,7 +7,6 @@ import React from 'react'
 const menuItems = [
     { name: 'Features', href: '#features' },
     { name: 'Pricing', href: '#pricing' },
-    { name: 'About', href: '#about' },
 ]
 
 export const HeroHeader = () => {
