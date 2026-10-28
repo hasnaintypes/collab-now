@@ -7,7 +7,7 @@ A real-time collaborative document editor built for modern teams. Create, edit, 
 
 This repo is a **Turborepo monorepo** with a feature-based (screaming architecture) app structure.
 
-**Status:** Core collaboration, the AI notes-from-URL MVP, multiple note styles, "Ask about this" RAG chat, a functional browser extension, and Paddle billing (checkout, webhooks, usage enforcement) are all shipped and in active use. Document templates, keyboard shortcuts, and workspace-wide chat are next — see [Roadmap](#roadmap).
+**Status:** Core collaboration, the AI notes-from-URL MVP, multiple note styles, "Ask about this" RAG chat, a functional browser extension, Paddle billing (checkout, webhooks, usage enforcement), document templates, and keyboard shortcuts are all shipped and in active use. Workspace-wide chat is next — see [Roadmap](#roadmap).
 
 ## Tech Stack
 
@@ -40,8 +40,12 @@ This repo is a **Turborepo monorepo** with a feature-based (screaming architectu
 | **09** | Document Search | Debounced search with recent documents filter |
 | **10** | Dark Mode | Full light/dark theme support via CSS variables (OKLch) |
 | **11** | Responsive | Desktop sidebar + mobile sheet navigation |
-
-> A browser extension (`apps/extension`) exists in the repo but is currently a **non-functional stub** — one-click "generate notes from the current tab" is planned for a later phase (see [Roadmap](#roadmap)).
+| **12** | Note Styles | Switch a generated document between 5 styles — Bullet Outline, Cornell, Mind-Map, Q&A/Flashcards, Executive Summary |
+| **13** | "Ask about this" Chat | RAG chat scoped to a single document's own source material (Pro/Team) |
+| **14** | Browser Extension | One-click "generate notes from the current tab" (YouTube/article), auth, job status, deep link into the result |
+| **15** | Document Templates | Starter templates (Meeting Notes, Project Brief, Weekly Status Update, Reading/Research Notes) from the New Document button |
+| **16** | Keyboard Shortcuts | Cmd/Ctrl+K document search from anywhere, Cmd/Ctrl+S autosave confirmation |
+| **17** | Billing (Paddle) | Free/Pro/Team plans with checkout, webhooks, and usage enforcement on AI notes generation |
 
 ## Getting Started
 
@@ -77,7 +81,7 @@ INNGEST_DEV=1
 INNGEST_EVENT_KEY=
 INNGEST_SIGNING_KEY=
 
-# Billing (Paddle) — checkout and webhooks are wired (P3-2/P3-3); usage enforcement is not yet (see Roadmap)
+# Billing (Paddle) — checkout, webhooks, and usage enforcement are all wired (P3-1 through P3-6)
 PADDLE_API_KEY=
 PADDLE_WEBHOOK_SECRET=
 NEXT_PUBLIC_PADDLE_ENV=sandbox
@@ -131,8 +135,9 @@ apps/
 │       ├── lib/                  Cross-cutting infra (liveblocks, uploadthing, inngest, gemini, rate-limit, cache-tags, pagination, action-result, utils)
 │       └── types/                Ambient global types shared by 3+ features
 │
-└── extension/                  Browser extension stub (Vite + React + MV3)
-                                  — see Roadmap, not yet functional
+└── extension/                  Browser extension (Vite + React + MV3) — auth,
+                                  tab detection, one-click generate, job
+                                  status, and a deep link into the result
 
 packages/
 ├── db/                          @collabnow/db — Drizzle schema + client
@@ -183,7 +188,7 @@ Work is tracked as GitHub issues, phased and labeled `phase-0` through `phase-4`
 | **1 — Ingestion MVP** | Paste a YouTube/article URL → validated, translated, summarized (Gemini) → saved as a document | ✅ Shipped |
 | **2 — Notes UX, Chat, Extension** | Additional note styles (Cornell, Mind-Map, Q&A, Executive Summary), "Ask about this" RAG chat, a functional browser extension | ✅ Shipped |
 | **3 — Billing** | Paddle checkout, webhooks, usage tracking/enforcement | ✅ Shipped |
-| **4 — Backlog** | Document templates, keyboard shortcuts, workspace-wide chat | 📋 Deferred |
+| **4 — Backlog** | Document templates ✅, keyboard shortcuts ✅, workspace-wide chat 📋 | 🟡 Partially shipped |
 
 See open/closed issues on GitHub for the full, itemized breakdown.
 
