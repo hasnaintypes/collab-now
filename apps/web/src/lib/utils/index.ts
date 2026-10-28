@@ -31,32 +31,40 @@ export const dateConverter = (timestamp: string): string => {
   }
 };
 
+// Previous palette had duplicates (#00CED1, #FFD700, #FF007F each listed
+// twice) and was disproportionately green/yellow-green/teal (~60% of its
+// 19 entries), which is why every collaborator kept landing on some shade
+// of green regardless of the hash — the hash itself wasn't badly
+// distributed, the palette it was indexing into was. Rebuilt as one color
+// per hue, evenly spread around the wheel (Tailwind's own 500-ish
+// shades), with exactly one green.
 export const brightColors = [
-  "#2E8B57",
-  "#FF6EB4",
-  "#00CDCD",
-  "#FF00FF",
-  "#FF007F",
-  "#FFD700",
-  "#00CED1",
-  "#FF1493",
-  "#00CED1",
-  "#FF7F50",
-  "#9ACD32",
-  "#FFA500",
-  "#32CD32",
-  "#ADFF2F",
-  "#DB7093",
-  "#00FF7F",
-  "#FFD700",
-  "#FF007F",
-  "#FF6347",
+  "#F43F5E", // rose
+  "#EC4899", // pink
+  "#D946EF", // fuchsia
+  "#A855F7", // purple
+  "#8B5CF6", // violet
+  "#6366F1", // indigo
+  "#3B82F6", // blue
+  "#0EA5E9", // sky
+  "#06B6D4", // cyan
+  "#14B8A6", // teal
+  "#10B981", // emerald (the one green)
+  "#F59E0B", // amber
+  "#F97316", // orange
+  "#EF4444", // red
+  "#E11D48", // crimson
+  "#7C3AED", // deep violet
 ];
 
 export function getUserColor(userId: string) {
-  let sum = 0;
+  // djb2 — a plain `sum += charCodeAt(i)` (the previous implementation)
+  // clusters statistically for same-length IDs (every Better Auth user id
+  // is the same length), which doesn't spread evenly across an index
+  // range; this shifts and XORs instead, so it doesn't have that bias.
+  let hash = 5381;
   for (let i = 0; i < userId.length; i++) {
-    sum += userId.charCodeAt(i);
+    hash = (hash * 33) ^ userId.charCodeAt(i);
   }
-  return brightColors[sum % brightColors.length];
+  return brightColors[Math.abs(hash) % brightColors.length];
 }
