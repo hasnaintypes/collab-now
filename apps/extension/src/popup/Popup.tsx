@@ -9,6 +9,8 @@ import { getToken } from "../lib/token-storage";
 import { verifyToken, type ConnectedAccount } from "../lib/auth-client";
 import { generateNotes, getJobStatus, type JobStatusView } from "../lib/job-client";
 import { API_BASE_URL } from "../lib/config";
+import { Logo } from "../components/logo";
+import { Button } from "../components/button";
 
 const SOURCE_TYPE_LABEL: Record<string, string> = {
   youtube: "This is a YouTube video.",
@@ -23,6 +25,14 @@ const JOB_STATUS_LABEL: Record<JobStatusView["status"], string> = {
 };
 
 const POLL_INTERVAL_MS = 2000;
+
+function StatusDot({ connected }: { connected: boolean }) {
+  return (
+    <span
+      className={`size-1.5 rounded-full ${connected ? "bg-success" : "bg-destructive"}`}
+    />
+  );
+}
 
 export default function Popup() {
   const [loading, setLoading] = useState(true);
@@ -150,123 +160,85 @@ export default function Popup() {
   const isBusy = generating || job?.status === "queued" || job?.status === "processing";
 
   return (
-    <div style={{ padding: 16, fontFamily: "system-ui, sans-serif", width: 260 }}>
-      <h1 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>CollabNow</h1>
+    <div className="w-[300px] bg-background p-4 text-foreground">
+      <div className="flex items-center justify-between">
+        <Logo />
+        <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <StatusDot connected={account !== null} />
+          {account ? "Connected" : "Not connected"}
+        </span>
+      </div>
 
-      {loading ? (
-        <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>Checking this page…</p>
-      ) : (
-        <>
-          <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
+      <div className="mt-3.5 rounded-md border border-border bg-card px-3 py-2.5">
+        {loading ? (
+          <p className="text-xs text-muted-foreground">Checking this page…</p>
+        ) : (
+          <p className="text-xs leading-relaxed text-foreground">
             {tabInfo === null
               ? "Couldn't read this tab's URL."
               : isSupportedPage
                 ? SOURCE_TYPE_LABEL[tabInfo.sourceType as string]
                 : "This page isn't a YouTube video or article CollabNow can turn into notes."}
           </p>
+        )}
+      </div>
 
-          <p style={{ fontSize: 12, color: account ? "#1a7f37" : "#b42318", marginTop: 4 }}>
-            {account ? `Connected as ${account.email}` : "Not connected — add a personal access token in Settings."}
-          </p>
-        </>
-      )}
-
-      {job?.status !== "ready" && (
-        <button
-          onClick={() => void handleGenerate()}
-          disabled={!canGenerate || isBusy}
-          title={
-            canGenerate
-              ? undefined
-              : "Requires a supported page and a connected personal access token"
-          }
-          style={{
-            marginTop: 12,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: !canGenerate || isBusy ? "not-allowed" : "pointer",
-            opacity: !canGenerate || isBusy ? 0.5 : 1,
-          }}
-        >
-          {generating ? "Submitting…" : "Generate notes"}
-        </button>
-      )}
-
-      {job && (
-        <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
-          {JOB_STATUS_LABEL[job.status]}
+      {!account && !loading && (
+        <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          Add a personal access token in Settings to connect this extension.
         </p>
       )}
 
-      {jobError && (
-        <p style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{jobError}</p>
-      )}
+      <div className="mt-3.5 flex flex-col gap-2">
+        {job?.status !== "ready" && (
+          <Button
+            onClick={() => void handleGenerate()}
+            disabled={!canGenerate || isBusy}
+            title={
+              canGenerate
+                ? undefined
+                : "Requires a supported page and a connected personal access token"
+            }
+          >
+            {generating ? "Submitting…" : "Generate notes"}
+          </Button>
+        )}
 
-      {jobUpgradeRequired && (
-        <button
-          onClick={openBillingSettings}
-          style={{
-            marginTop: 8,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Upgrade plan
-        </button>
-      )}
+        {job && (
+          <p className="text-xs text-muted-foreground">
+            {JOB_STATUS_LABEL[job.status]}
+          </p>
+        )}
 
-      {job?.status === "ready" && job.roomId && (
-        <button
-          onClick={openDocument}
-          style={{
-            marginTop: 8,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Open document
-        </button>
-      )}
+        {jobError && (
+          <p className="text-xs text-destructive">{jobError}</p>
+        )}
 
-      {(job?.status === "failed" || jobError) && (
-        <button
-          onClick={retry}
-          style={{
-            marginTop: 8,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Try again
-        </button>
-      )}
+        {jobUpgradeRequired && (
+          <Button variant="outline" onClick={openBillingSettings}>
+            Upgrade plan
+          </Button>
+        )}
 
-      {!account && (
-        <button
-          onClick={() => chrome.runtime.openOptionsPage()}
-          style={{
-            marginTop: 8,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Open Settings
-        </button>
-      )}
+        {job?.status === "ready" && job.roomId && (
+          <Button onClick={openDocument}>Open document</Button>
+        )}
+
+        {(job?.status === "failed" || jobError) && (
+          <Button variant="outline" onClick={retry}>
+            Try again
+          </Button>
+        )}
+
+        {!account && (
+          <Button
+            variant="outline"
+            onClick={() => chrome.runtime.openOptionsPage()}
+          >
+            Open Settings
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
