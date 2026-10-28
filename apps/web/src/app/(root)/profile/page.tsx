@@ -8,7 +8,6 @@ import {
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
-import { ThemeToggle } from "@/components/theme-toggle";
 import ProfileContent from "@/features/profile/components/profile-content";
 
 export default async function ProfilePage() {
@@ -28,7 +27,6 @@ export default async function ProfilePage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

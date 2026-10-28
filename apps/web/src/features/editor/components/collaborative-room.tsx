@@ -70,6 +70,7 @@ export default function CollaborativeRoom({
           <DocumentNavbar
             roomId={roomId}
             roomMetadata={roomMetadata}
+            users={users}
             currentUserType={currentUserType}
             currentUser={currentUser}
           />
@@ -105,13 +106,18 @@ export default function CollaborativeRoom({
           <main
             className={cn(
               "pt-28 pb-12 min-h-screen bg-background flex relative",
-              sidebarVisible ? "lg:ml-72" : "lg:ml-0"
+              sidebarVisible ? "xl:ml-72" : "xl:ml-0"
             )}
           >
-            {/* Mobile toggle buttons */}
+            {/* Mobile toggle buttons — `xl:hidden` now, matching the
+                outline panel's own breakpoint (document-sidebar.tsx) and
+                the discussion panel's existing `xl:` gate, so both
+                sidebars appear/disappear together at the same width
+                instead of the outline popping in a breakpoint earlier
+                and leaving an asymmetric tablet layout. */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="fixed left-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+              className="fixed left-4 top-32 z-10 p-2 text-muted-foreground hover:text-foreground transition-colors xl:hidden"
             >
               <PanelLeft className="size-5" />
             </button>
@@ -138,8 +144,6 @@ export default function CollaborativeRoom({
 
             <Editor
               roomId={roomId}
-              roomMetadata={roomMetadata}
-              users={users}
               currentUserType={currentUserType}
               onHeadingsChange={handleHeadingsChange}
               onWordCountChange={handleWordCountChange}

@@ -17,7 +17,7 @@ export default function UpgradeLink({
 }) {
   return (
     <Link
-      href="/settings"
+      href="/settings?tab=billing"
       className={cn(
         "font-medium text-primary underline-offset-4 hover:underline",
         block ? "block text-sm" : "text-xs",

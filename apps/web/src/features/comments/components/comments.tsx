@@ -27,8 +27,15 @@ function ThreadWrapper({ thread }: { thread: ThreadData<BaseMetadata> }) {
   );
 }
 
-export default function Comments() {
-  const { threads } = useThreads();
+/**
+ * Split in two (rather than one `Comments` component) so the composer can
+ * sit outside the scrollable region in `editor.tsx`'s panel — same
+ * scroll-behind-the-header treatment as the document outline sidebar
+ * (document-sidebar.tsx): the composer stays fixed at the top of the
+ * panel, and only the thread list scrolls underneath it, instead of the
+ * composer scrolling away with everything else.
+ */
+export function CommentComposer() {
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
 
   // Soft, best-effort gate — see `checkCommentRateLimit`'s doc comment for why
@@ -50,7 +57,7 @@ export default function Comments() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       <Composer
         className="rounded-sm border border-border/50"
         onComposerSubmit={handleComposerSubmit}
@@ -58,17 +65,29 @@ export default function Comments() {
       {rateLimitError && (
         <p className="text-xs text-red-500">{rateLimitError}</p>
       )}
-      {threads.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <MessageSquare className="mb-3 size-8 text-muted-foreground/40" />
-          <p className="text-xs font-medium text-muted-foreground">
-            No comments yet
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground/60">
-            Select text in the editor to leave a comment.
-          </p>
-        </div>
-      )}
+    </div>
+  );
+}
+
+export function CommentThreadList() {
+  const { threads } = useThreads();
+
+  if (threads.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <MessageSquare className="mb-3 size-8 text-muted-foreground/40" />
+        <p className="text-xs font-medium text-muted-foreground">
+          No comments yet
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground/60">
+          Select text in the editor to leave a comment.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
       {threads.map((thread) => (
         <ThreadWrapper key={thread.id} thread={thread} />
       ))}

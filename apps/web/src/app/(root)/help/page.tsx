@@ -4,7 +4,6 @@ import { auth } from "@/features/auth/lib";
 import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
-import { ThemeToggle } from "@/components/theme-toggle";
 import HelpContent from "@/features/help/components/help-content";
 
 export default async function HelpPage() {
@@ -15,7 +14,6 @@ export default async function HelpPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}

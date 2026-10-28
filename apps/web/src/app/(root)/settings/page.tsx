@@ -6,6 +6,7 @@ import { auth } from "@/features/auth/lib";
 import {
   getOrCreateWorkspace,
   getWorkspaceMembers,
+  getPendingInvites,
 } from "@/features/workspace/actions/workspace.actions";
 import { listPersonalAccessTokens } from "@/features/settings/actions/token.actions";
 import { getWorkspaceSubscription } from "@/features/billing/actions/billing.actions";
@@ -13,7 +14,6 @@ import DashboardHeader from "@/components/layout/dashboard-header";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
 import SettingsContent from "@/features/settings/components/settings-content";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function SettingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -30,12 +30,17 @@ export default async function SettingsPage() {
   // fallback rather than failing the whole page — the rest of Settings is
   // still useful without any of them. They're independent, so fetch them
   // concurrently.
-  const [membersResult, tokensResult, subscriptionResult] = await Promise.all([
-    getWorkspaceMembers(workspaceData.id),
-    listPersonalAccessTokens(),
-    getWorkspaceSubscription(workspaceData.id),
-  ]);
+  const [membersResult, pendingInvitesResult, tokensResult, subscriptionResult] =
+    await Promise.all([
+      getWorkspaceMembers(workspaceData.id),
+      getPendingInvites(workspaceData.id),
+      listPersonalAccessTokens(),
+      getWorkspaceSubscription(workspaceData.id),
+    ]);
   const members = membersResult.success ? membersResult.data : [];
+  const pendingInvites = pendingInvitesResult.success
+    ? pendingInvitesResult.data
+    : [];
   const tokens = tokensResult.success ? tokensResult.data : [];
   const subscription = subscriptionResult.success
     ? subscriptionResult.data
@@ -44,7 +49,6 @@ export default async function SettingsPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <DashboardHeader>
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}
@@ -88,6 +92,7 @@ export default async function SettingsPage() {
             memberCount: workspaceData.memberCount,
           }}
           members={members}
+          pendingInvites={pendingInvites}
           tokens={tokens}
           subscription={subscription}
         />

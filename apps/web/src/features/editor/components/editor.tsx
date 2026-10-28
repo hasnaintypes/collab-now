@@ -1,10 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileText, FileDown, MessageSquare, Printer, X } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  FileText,
+  FileDown,
+  MessageSquare,
+  Printer,
+  X,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import ActiveCollaborators from "@/features/documents/components/active-collaborators";
-import ShareDialog from "@/features/documents/components/share-dialog";
 import Theme from "./plugins/theme";
 import ToolbarPlugin from "./plugins/toolbar-plugin";
 import HeadingOutlinePlugin, {
@@ -32,7 +38,10 @@ import { ExportBridge, type ExportFunctions } from "./plugins/export-plugin";
 import SeedNotesPlugin from "./plugins/seed-notes-plugin";
 import SeedTemplatePlugin from "./plugins/seed-template-plugin";
 import { useThreads } from "@liveblocks/react/suspense";
-import Comments from "@/features/comments/components/comments";
+import {
+  CommentComposer,
+  CommentThreadList,
+} from "@/features/comments/components/comments";
 import ChatPanel from "@/features/chat/components/chat-panel";
 import Loader from "@/components/shared/loader";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -102,8 +111,6 @@ function RightPanelTabs({
 
 export function Editor({
   roomId,
-  roomMetadata,
-  users,
   currentUserType,
   onHeadingsChange,
   onWordCountChange,
@@ -118,11 +125,6 @@ export function Editor({
   onRightPanelTabChange,
 }: {
   roomId: string;
-  /** Needed here (rather than just in the navbar) now that Share/Export/
-      Collaborators live in this second header row — `creatorId` for
-      `ShareDialog`'s permission check. */
-  roomMetadata: RoomMetadata;
-  users: User[];
   currentUserType: UserType;
   onHeadingsChange: (headings: HeadingEntry[]) => void;
   onWordCountChange?: (wordCount: number) => void;
@@ -174,32 +176,45 @@ export function Editor({
       {status && <SeedTemplatePlugin templateId={templateId} />}
 
       {/* Persistent second header row (Google Docs-style): the formatting
-          toolbar on the left, and Collaborators/Export/Share on the right
-          — moved down from `document-navbar.tsx`, which now only holds
-          the logo/title/account menu. Rendered unconditionally (not
-          gated on `status`/`currentUserType`) since Export/Share/
-          Collaborators are meaningful for viewers too; only the
-          formatting commands themselves are editor-only. The toolbar
-          still has to live inside this `LexicalComposer` (it calls
-          `useLexicalComposerContext()`), so it's rendered here and
-          positioned via `fixed` rather than lifted into the navbar
-          component itself, which sits outside this tree. */}
+          toolbar on the left, Export on the right — Collaborators/Share
+          live in `document-navbar.tsx` now, next to the account avatar,
+          not here. Rendered unconditionally (not gated on
+          `status`/`currentUserType`) since Export is meaningful for
+          viewers too; only the formatting commands themselves are
+          editor-only. The toolbar still has to live inside this
+          `LexicalComposer` (it calls `useLexicalComposerContext()`), so
+          it's rendered here and positioned via `fixed` rather than
+          lifted into the navbar component itself, which sits outside
+          this tree. */}
       <div className="fixed top-16 inset-x-0 z-40 h-12 flex items-center justify-between gap-2 px-4 md:px-8 bg-background border-b border-border/50">
-        <div className="flex items-center overflow-x-auto">
+        {/* Fade mask on the trailing edge hints there's more to scroll to
+            — on a phone this toolbar holds 15+ buttons (undo/redo, bold/
+            italic/underline/strikethrough, alignment, headings, lists)
+            that don't all fit, and `overflow-x-auto` alone gave no sign
+            anything was being clipped. The mask is a fixed cosmetic
+            affordance (not conditional on actual overflow state), same
+            as a tab strip's fade — cheap and always correct enough. */}
+        <div
+          className="flex items-center overflow-x-auto no-scrollbar [mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)] md:[mask-image:none]"
+        >
           {status && currentUserType === "editor" && <ToolbarPlugin />}
         </div>
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
-          <div className="mr-1 md:mr-2 hidden sm:block">
-            <ActiveCollaborators />
-          </div>
-
+          {/* Hidden below `xl` — same reasoning as Collaborators in the
+              navbar: on tablet/mobile widths this row is already tight
+              with the formatting toolbar, so Export drops out there and
+              only reappears once there's real room for it. */}
           <Popover>
             <PopoverTrigger asChild>
               <button
-                aria-label="Export"
-                className="p-2 rounded hover:bg-muted transition-colors"
+                aria-label="Export document"
+                className="hidden xl:flex items-center gap-1.5 rounded px-2.5 py-2 hover:bg-muted transition-colors"
               >
-                <Download className="size-[18px] text-foreground" />
+                <Download className="size-4 text-foreground" />
+                <span className="text-sm font-medium text-foreground">
+                  Export
+                </span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-48 p-1">
@@ -226,13 +241,6 @@ export function Editor({
               </button>
             </PopoverContent>
           </Popover>
-
-          <ShareDialog
-            roomId={roomId}
-            collaborators={users}
-            creatorId={roomMetadata.creatorId}
-            currentUserType={currentUserType}
-          />
         </div>
       </div>
 
@@ -248,15 +256,20 @@ export function Editor({
             content splitting, which is a separate, much bigger feature. */}
         <div
           className={cn(
-            "flex-1 flex flex-col items-center py-12 px-8 overflow-y-auto no-scrollbar bg-muted/40",
+            "flex-1 flex flex-col items-center py-6 px-3 sm:py-12 sm:px-8 overflow-y-auto no-scrollbar bg-muted/40",
             rightPanelVisible && "xl:mr-80"
           )}
         >
-          {/* Writing Area (The "Page") */}
+          {/* Writing Area (The "Page") — padding scales down below `sm` so
+              the actual writing area isn't squeezed to a sliver on a
+              phone: at 375px, the old fixed `p-16` (64px/side) left only
+              ~183px of real content width after the wrapper's own `px-8`.
+              `p-16` is still used at `lg`+ so the A4 page keeps its
+              print-like margins once there's room for them. */}
           {!status ? (
             <Loader className="min-h-[400px]" />
           ) : (
-            <article className="w-[210mm] max-w-full p-16 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.08)] min-h-[297mm] border border-border/10">
+            <article className="w-[210mm] max-w-full p-6 sm:p-10 lg:p-16 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.08)] min-h-[297mm] border border-border/10">
               <div className="relative min-h-[800px]">
                 <RichTextPlugin
                   contentEditable={
@@ -279,8 +292,8 @@ export function Editor({
           {/* Desktop — collapses to a floating round toggle when closed,
               same pattern as the outline panel, rather than a rail. */}
           {rightPanelVisible ? (
-            <aside className="fixed right-0 top-28 h-[calc(100vh-112px)] w-80 border-l border-border/50 hidden xl:block overflow-y-auto no-scrollbar bg-background">
-              <div className="flex items-center justify-between px-6 pt-10 pb-6">
+            <aside className="fixed right-0 top-28 flex h-[calc(100vh-112px)] w-80 flex-col overflow-hidden border-l border-border/50 hidden xl:flex bg-background">
+              <div className="flex items-center justify-between px-6 pt-10 pb-6 shrink-0">
                 <button
                   onClick={() => setRightPanelVisible(false)}
                   className="p-1 rounded hover:bg-muted transition-colors"
@@ -293,13 +306,25 @@ export function Editor({
                   onTabChange={onRightPanelTabChange}
                 />
               </div>
-              <div className="px-4 pb-12">
-                {hasChatSource && rightPanelTab === "chat" ? (
+              {hasChatSource && rightPanelTab === "chat" ? (
+                <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 pb-12">
                   <ChatPanel roomId={roomId} />
-                ) : (
-                  <Comments />
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  {/* Composer stays put, same scroll-behind-the-header
+                      treatment as the document outline sidebar
+                      (document-sidebar.tsx): it's outside the
+                      overflow-y-auto region below, so only the thread
+                      list scrolls underneath it. */}
+                  <div className="px-4 pb-4 shrink-0">
+                    <CommentComposer />
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 pb-12">
+                    <CommentThreadList />
+                  </div>
+                </>
+              )}
             </aside>
           ) : (
             <button
@@ -314,23 +339,30 @@ export function Editor({
           <Sheet open={discussionOpen} onOpenChange={onDiscussionOpenChange}>
             <SheetContent
               side="right"
-              className="w-80 p-0 bg-background overflow-y-auto no-scrollbar"
+              className="w-80 p-0 bg-background flex flex-col overflow-hidden"
             >
               <SheetTitle className="sr-only">Discussion</SheetTitle>
-              <div className="flex items-center px-6 pt-10 pb-6">
+              <div className="flex items-center px-6 pt-10 pb-6 shrink-0">
                 <RightPanelTabs
                   hasChatSource={hasChatSource}
                   activeTab={rightPanelTab}
                   onTabChange={onRightPanelTabChange}
                 />
               </div>
-              <div className="px-4 pb-12">
-                {hasChatSource && rightPanelTab === "chat" ? (
+              {hasChatSource && rightPanelTab === "chat" ? (
+                <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 pb-12">
                   <ChatPanel roomId={roomId} />
-                ) : (
-                  <Comments />
-                )}
-              </div>
+                </div>
+              ) : (
+                <>
+                  <div className="px-4 pb-4 shrink-0">
+                    <CommentComposer />
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 pb-12">
+                    <CommentThreadList />
+                  </div>
+                </>
+              )}
             </SheetContent>
           </Sheet>
           <FloatingComposer className="w-[350px]" />

@@ -19,7 +19,6 @@ import MobileSidebar from "@/features/workspace/components/mobile-sidebar";
 import UserButton from "@/components/shared/user-button";
 import Notifications from "@/features/notifications/components/notifications";
 import Sidebar from "@/features/workspace/components/sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import type { DocumentFilter } from "@/features/documents/types";
 
 const VALID_FILTERS: DocumentFilter[] = ["recent", "starred", "shared", "archived", "all"];
@@ -75,7 +74,6 @@ export default async function DashboardPage({
       <DashboardHeader
         mobileSidebar={<MobileSidebar {...sidebarProps} />}
       >
-        <ThemeToggle />
         <Notifications />
         <UserButton
           name={user.name}
@@ -93,8 +91,12 @@ export default async function DashboardPage({
           <div className="mx-auto max-w-6xl px-6 pb-16 pt-12 md:px-8">
             {/* Hero / Headline */}
             <header className="mb-20">
-              <div className="flex items-center justify-between mb-4">
-                <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-6xl">
+              {/* Stacks below `sm` — a bare `justify-between` row here put
+                  a 48px+ heading directly against two action buttons with
+                  no fallback, which crowds or wraps awkwardly on a
+                  ~375–414px phone. */}
+              <div className="flex flex-col items-start gap-4 mb-4 sm:flex-row sm:items-center sm:justify-between">
+                <h1 className="text-4xl font-extrabold leading-tight tracking-tighter sm:text-5xl md:text-6xl">
                   {filter === "recent"
                     ? "Recent"
                     : filter === "starred"
