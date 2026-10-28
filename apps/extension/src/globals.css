@@ -1,12 +1,17 @@
 @import "tailwindcss";
 
 /*
- * Trimmed copy of apps/web/src/app/globals.css's dark-mode token values —
- * the extension popup/options pages always render dark (no theme toggle;
- * the web app's own default feel), so this skips the light-mode block and
- * the `.dark`-class/`@custom-variant` indirection entirely and just
- * defines the dark values directly as the one theme. Keep these in sync
- * with globals.css's `.dark { ... }` block if that ever changes.
+ * Dark-mode token values copied from apps/web/src/app/globals.css's
+ * `.dark { ... }` block — the extension popup/options pages always render
+ * dark (no theme toggle; the web app's own default feel), so this skips
+ * the light-mode block and the `.dark`-class/`@custom-variant` indirection
+ * entirely and just defines the dark values directly as the one theme.
+ * Keep these in sync with that `.dark` block if it ever changes.
+ *
+ * One addition not present there: `--success`, used for this popup's own
+ * connected/not-connected status dot. The web app has no equivalent
+ * semantic token (it uses ad hoc green only in a couple of places), so
+ * this is this file's own value, not something to look for upstream.
  */
 :root {
   --background: oklch(0.145 0 0);
